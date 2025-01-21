@@ -1,0 +1,27 @@
+# Use Python 3.9 slim image as base
+FROM python:3.9-slim
+
+# Set working directory in container
+WORKDIR /app
+
+# Copy requirements first to leverage Docker cache
+COPY requirements_server.txt .
+
+# Install dependencies
+RUN pip install --no-cache-dir -r requirements_server.txt
+
+# Copy backend code
+COPY master/backend ./backend
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Expose port (you may need to adjust this based on your server.py configuration)
+EXPOSE 8000
+
+# Set the working directory to where server.py is located
+WORKDIR /app/backend
+
+# Command to run the server
+CMD ["python", "server.py"]
