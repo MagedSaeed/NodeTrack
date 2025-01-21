@@ -1,2 +1,4 @@
-python-dotenv
 flask
+pandas
+Flask-Cors
+python-dotenv
