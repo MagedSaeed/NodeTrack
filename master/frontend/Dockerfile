@@ -1,6 +1,10 @@
 FROM node:18-alpine
 
-WORKDIR /app
+# Create the full directory structure
+WORKDIR /app/master/frontend/dashboard
+
+# Copy .env file to /app
+COPY .env /app/.env
 
 # Copy package files
 COPY master/frontend/dashboard/package*.json ./
