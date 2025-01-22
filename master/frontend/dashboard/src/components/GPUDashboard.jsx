@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
+import { CollapsibleCard, Card } from './ui/card';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Activity, Server, Users, Cpu, Database, Clock, AlertCircle } from 'lucide-react';
 
@@ -49,9 +49,7 @@ const GPUDashboard = () => {
     );
   }
 
-  // Transform data for the charts with proper node mapping
   const userChartData = Object.entries(data.per_user).map(([username, stats]) => {
-    // Find the node information from last_24h data
     const userNodeEntry = Object.entries(data.last_24h).find(([_, entry]) => 
       entry.username === username
     );
@@ -80,18 +78,15 @@ const GPUDashboard = () => {
     const { x, y, width, payload, value } = props;
     if (!payload || !payload.nodeName) return null;
     
-    // Calculate total height of the stack
     const totalValue = payload['Average Memory'] + payload['Additional to Max'];
-    // Get y position for the first bar (which is at the bottom)
     const yAxis = props.chartProps?.children?.find(child => child.type.displayName === 'YAxis');
     const yScale = yAxis?.props?.scale;
-    // Calculate position at the top of the stacked bar
     const yPos = yScale ? yScale(totalValue) : y;
     
     return (
       <text
         x={x + width / 2}
-        y={yPos - 10}  // Position above the total height
+        y={yPos - 10}
         fill="#666"
         textAnchor="middle"
         fontSize="12"
@@ -113,54 +108,63 @@ const GPUDashboard = () => {
 
           {/* Metrics Overview */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card className="bg-white border-none shadow-lg hover:shadow-xl transition-shadow">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-lg font-medium text-gray-900">Active Users</CardTitle>
-                <Users className="h-5 w-5 text-blue-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-gray-900">
-                  {Object.keys(data.per_user).length}
+            {/* Keep the summary cards non-collapsible for quick overview */}
+            <Card
+              title={
+                <div className="flex items-center justify-between w-full">
+                  <span className="text-lg font-medium text-gray-900">Active Users</span>
+                  <Users className="h-5 w-5 text-blue-600" />
                 </div>
-                <p className="text-sm text-gray-500 mt-1">Currently utilizing resources</p>
-              </CardContent>
+              }
+              className="bg-white border-none shadow-lg hover:shadow-xl transition-shadow"
+            >
+              <div className="text-3xl font-bold text-gray-900">
+                {Object.keys(data.per_user).length}
+              </div>
+              <p className="text-sm text-gray-500 mt-1">Currently utilizing resources</p>
             </Card>
 
-            <Card className="bg-white border-none shadow-lg hover:shadow-xl transition-shadow">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-lg font-medium text-gray-900">Active Nodes</CardTitle>
-                <Server className="h-5 w-5 text-green-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-gray-900">
-                  {Object.keys(data.per_node).length}
+            <Card
+              title={
+                <div className="flex items-center justify-between w-full">
+                  <span className="text-lg font-medium text-gray-900">Active Nodes</span>
+                  <Server className="h-5 w-5 text-green-600" />
                 </div>
-                <p className="text-sm text-gray-500 mt-1">Operational computing nodes</p>
-              </CardContent>
+              }
+              className="bg-white border-none shadow-lg hover:shadow-xl transition-shadow"
+            >
+              <div className="text-3xl font-bold text-gray-900">
+                {Object.keys(data.per_node).length}
+              </div>
+              <p className="text-sm text-gray-500 mt-1">Operational computing nodes</p>
             </Card>
 
-            <Card className="bg-white border-none shadow-lg hover:shadow-xl transition-shadow">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-lg font-medium text-gray-900">GPUs in Use</CardTitle>
-                <Cpu className="h-5 w-5 text-purple-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-gray-900">{totalGPUs}</div>
-                <p className="text-sm text-gray-500 mt-1">Total GPU units allocated</p>
-              </CardContent>
+            <Card
+              title={
+                <div className="flex items-center justify-between w-full">
+                  <span className="text-lg font-medium text-gray-900">GPUs in Use</span>
+                  <Cpu className="h-5 w-5 text-purple-600" />
+                </div>
+              }
+              className="bg-white border-none shadow-lg hover:shadow-xl transition-shadow"
+            >
+              <div className="text-3xl font-bold text-gray-900">{totalGPUs}</div>
+              <p className="text-sm text-gray-500 mt-1">Total GPU units allocated</p>
             </Card>
           </div>
 
           {/* Charts Section */}
           <div className="space-y-6">
-            <Card className="bg-white border-none shadow-lg">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
+            <CollapsibleCard
+              title={
+                <div className="flex items-center space-x-2">
                   <Database className="h-5 w-5 text-blue-600" />
                   <span>Memory Usage Distribution</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="h-96">
+                </div>
+              }
+              className="bg-white border-none shadow-lg"
+            >
+              <div className="h-96">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={userChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
@@ -191,18 +195,19 @@ const GPUDashboard = () => {
                     />
                   </BarChart>
                 </ResponsiveContainer>
-              </CardContent>
-            </Card>
+              </div>
+            </CollapsibleCard>
 
-            {/* Node Utilization Chart */}
-            <Card className="bg-white border-none shadow-lg">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
+            <CollapsibleCard
+              title={
+                <div className="flex items-center space-x-2">
                   <Server className="h-5 w-5 text-green-600" />
                   <span>Node Utilization Analysis</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="h-96">
+                </div>
+              }
+              className="bg-white border-none shadow-lg"
+            >
+              <div className="h-96">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={nodeChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
@@ -221,42 +226,41 @@ const GPUDashboard = () => {
                     <Bar dataKey="Active Users" fill="#10b981" />
                   </BarChart>
                 </ResponsiveContainer>
-              </CardContent>
-            </Card>
+              </div>
+            </CollapsibleCard>
 
-            {/* Activity Log */}
-            <Card className="bg-white border-none shadow-lg">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
+            <CollapsibleCard
+              title={
+                <div className="flex items-center space-x-2">
                   <Clock className="h-5 w-5 text-purple-600" />
                   <span>Recent Activity Log</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-gray-200">
-                        <th className="text-left p-4 text-gray-600 font-medium">User</th>
-                        <th className="text-left p-4 text-gray-600 font-medium">Node</th>
-                        <th className="text-left p-4 text-gray-600 font-medium">Avg Memory (MB)</th>
-                        <th className="text-left p-4 text-gray-600 font-medium">GPUs Used</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Object.entries(data.last_24h).map(([key, stats]) => (
-                        <tr key={key} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                          <td className="p-4 text-gray-900">{stats.username}</td>
-                          <td className="p-4 text-gray-900">{stats.hostname}</td>
-                          <td className="p-4 text-gray-900">{Math.round(stats.avg_memory)}</td>
-                          <td className="p-4 text-gray-900">{stats.gpus_used}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
                 </div>
-              </CardContent>
-            </Card>
+              }
+              className="bg-white border-none shadow-lg"
+            >
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left p-4 text-gray-600 font-medium">User</th>
+                      <th className="text-left p-4 text-gray-600 font-medium">Node</th>
+                      <th className="text-left p-4 text-gray-600 font-medium">Avg Memory (MB)</th>
+                      <th className="text-left p-4 text-gray-600 font-medium">GPUs Used</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(data.last_24h).map(([key, stats]) => (
+                      <tr key={key} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                        <td className="p-4 text-gray-900">{stats.username}</td>
+                        <td className="p-4 text-gray-900">{stats.hostname}</td>
+                        <td className="p-4 text-gray-900">{Math.round(stats.avg_memory)}</td>
+                        <td className="p-4 text-gray-900">{stats.gpus_used}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CollapsibleCard>
           </div>
         </div>
       </div>
