@@ -1,3 +1,5 @@
+# collector_server.py
+import os
 from flask import Flask, request, jsonify
 import json
 import pandas as pd
@@ -7,7 +9,15 @@ from flask_cors import CORS
 
 app = Flask(__name__, static_folder='../frontend/dashboard/dist')
 CORS(app)
-LOG_FILE = 'cluster_gpu_usage.log'
+
+DATA_DIR = os.environ.get('SERVER_DATA_DIR')
+
+if not DATA_DIR:
+    DATA_DIR = './data'
+
+LOG_FILE = f'{DATA_DIR}/cluster_gpu_usage.log'
+
+# Add excluded users
 EXCLUDED_USERS = {'gdm'}
 
 def clean_nan_values(obj):
