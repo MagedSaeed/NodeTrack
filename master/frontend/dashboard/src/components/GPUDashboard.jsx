@@ -50,7 +50,7 @@ const GPUDashboard = () => {
   }
 
   const userChartData = Object.entries(data.per_user).map(([username, stats]) => {
-    const userNodeEntry = Object.entries(data.last_24h).find(([_, entry]) => 
+    const userNodeEntry = Object.entries(data.last_month).find(([_, entry]) => 
       entry.username === username
     );
     
@@ -69,7 +69,7 @@ const GPUDashboard = () => {
   }));
 
   const totalGPUs = Object.entries(data.per_node).reduce((total, [hostname, stats]) => {
-    return total + Math.max(...Object.values(data.last_24h)
+    return total + Math.max(...Object.values(data.last_month)
       .filter(entry => entry.hostname === hostname)
       .map(entry => entry.gpus_used));
   }, 0);
@@ -103,12 +103,18 @@ const GPUDashboard = () => {
           {/* Header Section */}
           <div className="flex flex-col space-y-2">
             <h1 className="text-4xl font-bold text-gray-900">NodeTrack Dashboard</h1>
-            <p className="text-gray-600">High-Performance Computing Resource Monitor</p>
+            <div className="flex flex-col space-y-1">
+              <p className="text-gray-600">High-Performance Computing Resource Monitor</p>
+              {data.date_range && (
+                <p className="text-sm text-gray-500">
+                  Data range: {new Date(data.date_range.start).toLocaleString()} to {new Date(data.date_range.end).toLocaleString()}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Metrics Overview */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Keep the summary cards non-collapsible for quick overview */}
             <Card
               title={
                 <div className="flex items-center justify-between w-full">
@@ -233,7 +239,7 @@ const GPUDashboard = () => {
               title={
                 <div className="flex items-center space-x-2">
                   <Clock className="h-5 w-5 text-purple-600" />
-                  <span>Recent Activity Log</span>
+                  <span>Monthly Activity Log</span>
                 </div>
               }
               className="bg-white border-none shadow-lg"
@@ -249,7 +255,7 @@ const GPUDashboard = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {Object.entries(data.last_24h).map(([key, stats]) => (
+                    {Object.entries(data.last_month).map(([key, stats]) => (
                       <tr key={key} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                         <td className="p-4 text-gray-900">{stats.username}</td>
                         <td className="p-4 text-gray-900">{stats.hostname}</td>
