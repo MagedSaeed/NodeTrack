@@ -12,7 +12,7 @@ const GPUDashboard = () => {
     const fetchData = async () => {
       try {
         const serverAddress = import.meta.env.VITE_SERVER_ADDRESS
-        console.log(serverAddress)
+        console.log(import.meta.env)
         const response = await fetch(`http://${serverAddress}:5000/report`);
         const result = await response.json();
         setData(result);
