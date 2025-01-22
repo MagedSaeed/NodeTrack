@@ -15,6 +15,14 @@ LOG_FILE = 'cluster_gpu_usage.log'
 # Add excluded users
 EXCLUDED_USERS = {'gdm'}
 
+@app.route('/submit', methods=['POST'])
+def submit_data():
+    data = request.get_json()
+    with open(LOG_FILE, 'a') as f:
+        for entry in data:
+            f.write(json.dumps(entry) + '\n')
+    return 'OK'
+
 @app.route('/report', methods=['GET'])
 def generate_report():
     try:
