@@ -6,11 +6,14 @@ import numpy as np
 from datetime import datetime, timedelta
 
 from flask import Flask, request, jsonify
-from flask_cors import CORS  # Add this import
+from flask_cors import CORS
 
 app = Flask(__name__, static_folder='../frontend/dashboard/dist')
 CORS(app)
 LOG_FILE = 'cluster_gpu_usage.log'
+
+# Add excluded users
+EXCLUDED_USERS = {'gdm'}
 
 @app.route('/submit', methods=['POST'])
 def submit_data():
@@ -26,11 +29,14 @@ def generate_report():
         # Read and parse log file
         df = pd.DataFrame([json.loads(line) for line in open(LOG_FILE)])
         
+        # Filter out excluded users
+        df = df[~df['username'].isin(EXCLUDED_USERS)]
+        
         # Generate various reports
         current_time = datetime.now()
-        last_24h = current_time - timedelta(days=1)
+        last_month = current_time - timedelta(days=30)
         
-        recent_df = df[pd.to_datetime(df['timestamp']) > last_24h]
+        recent_df = df[pd.to_datetime(df['timestamp']) > last_month]
         
         # Format reports to be JSON serializable
         per_user = df.groupby('username').agg({
@@ -47,17 +53,17 @@ def generate_report():
         })
         per_node.columns = ['unique_users', 'avg_memory']
         
-        # Fix the last_24h stats by creating a compound key
-        last_24h_stats = recent_df.groupby(['username', 'hostname']).agg({
+        # Calculate monthly stats using compound key
+        monthly_stats = recent_df.groupby(['username', 'hostname']).agg({
             'memory_used': 'mean',
             'gpu_id': 'nunique'
         }).reset_index()
         
         # Convert to dictionary with proper string keys
-        last_24h_dict = {}
-        for _, row in last_24h_stats.iterrows():
+        monthly_dict = {}
+        for _, row in monthly_stats.iterrows():
             key = f"{row['username']}_{row['hostname']}"
-            last_24h_dict[key] = {
+            monthly_dict[key] = {
                 'avg_memory': float(row['memory_used']),
                 'gpus_used': int(row['gpu_id']),
                 'username': row['username'],
@@ -67,7 +73,7 @@ def generate_report():
         reports = {
             'per_user': per_user.to_dict(orient='index'),
             'per_node': per_node.to_dict(orient='index'),
-            'last_24h': last_24h_dict
+            'last_month': monthly_dict  # Changed from last_24h to last_month
         }
         
         # Convert numeric types to native Python types
