@@ -87,7 +87,7 @@ const GPUDashboard = () => {
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 min-h-screen">
       {/* Header Section */}
-      <div className="mb-6">
+      <div className="mb-6 bg-slate-100 rounded-lg p-4">
         <div className="flex items-baseline justify-between">
           <h1 className="text-2xl font-bold text-slate-800">NodeTrack Dashboard</h1>
           {data.date_range && (
@@ -102,39 +102,39 @@ const GPUDashboard = () => {
       {/* Metrics Overview */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         <Card className="bg-white shadow-md hover:shadow-lg transition-all duration-200 rounded-lg border border-slate-100">
-          <CardHeader className="flex flex-row items-center justify-between p-4 pb-0">
-            <CardTitle className="text-sm font-medium text-slate-600">Active Users</CardTitle>
-            <div className="p-1.5 bg-blue-50 rounded-md">
-              <Users className="h-4 w-4 text-blue-500" />
+          <div className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="p-1.5 bg-blue-50 rounded-md">
+                <Users className="h-4 w-4 text-blue-500" />
+              </div>
+              <h3 className="text-sm font-medium text-slate-600">Active Users</h3>
             </div>
-          </CardHeader>
-          <CardContent className="p-4 pt-2">
             <div className="text-2xl font-bold text-slate-800">{Object.keys(data.per_user).length}</div>
-          </CardContent>
+          </div>
         </Card>
 
         <Card className="bg-white shadow-md hover:shadow-lg transition-all duration-200 rounded-lg border border-slate-100">
-          <CardHeader className="flex flex-row items-center justify-between p-4 pb-0">
-            <CardTitle className="text-sm font-medium text-slate-600">Active Nodes</CardTitle>
-            <div className="p-1.5 bg-emerald-50 rounded-md">
-              <Server className="h-4 w-4 text-emerald-500" />
+          <div className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="p-1.5 bg-emerald-50 rounded-md">
+                <Server className="h-4 w-4 text-emerald-500" />
+              </div>
+              <h3 className="text-sm font-medium text-slate-600">Active Nodes</h3>
             </div>
-          </CardHeader>
-          <CardContent className="p-4 pt-2">
             <div className="text-2xl font-bold text-slate-800">{Object.keys(data.per_node).length}</div>
-          </CardContent>
+          </div>
         </Card>
 
         <Card className="bg-white shadow-md hover:shadow-lg transition-all duration-200 rounded-lg border border-slate-100">
-          <CardHeader className="flex flex-row items-center justify-between p-4 pb-0">
-            <CardTitle className="text-sm font-medium text-slate-600">GPUs in Use</CardTitle>
-            <div className="p-1.5 bg-violet-50 rounded-md">
-              <Cpu className="h-4 w-4 text-violet-500" />
+          <div className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="p-1.5 bg-violet-50 rounded-md">
+                <Cpu className="h-4 w-4 text-violet-500" />
+              </div>
+              <h3 className="text-sm font-medium text-slate-600">GPUs in Use</h3>
             </div>
-          </CardHeader>
-          <CardContent className="p-4 pt-2">
             <div className="text-2xl font-bold text-slate-800">{totalGPUs}</div>
-          </CardContent>
+          </div>
         </Card>
       </div>
 
