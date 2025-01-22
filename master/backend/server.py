@@ -15,14 +15,6 @@ LOG_FILE = 'cluster_gpu_usage.log'
 # Add excluded users
 EXCLUDED_USERS = {'gdm'}
 
-@app.route('/submit', methods=['POST'])
-def submit_data():
-    data = request.get_json()
-    with open(LOG_FILE, 'a') as f:
-        for entry in data:
-            f.write(json.dumps(entry) + '\n')
-    return 'OK'
-
 @app.route('/report', methods=['GET'])
 def generate_report():
     try:
@@ -37,6 +29,12 @@ def generate_report():
         last_month = current_time - timedelta(days=30)
         
         recent_df = df[pd.to_datetime(df['timestamp']) > last_month]
+        
+        # Get the actual date range from the data
+        date_range = {
+            'start': last_month.strftime('%Y-%m-%d %H:%M:%S'),
+            'end': current_time.strftime('%Y-%m-%d %H:%M:%S')
+        }
         
         # Format reports to be JSON serializable
         per_user = df.groupby('username').agg({
@@ -71,9 +69,10 @@ def generate_report():
             }
 
         reports = {
+            'date_range': date_range,  # Added date range to response
             'per_user': per_user.to_dict(orient='index'),
             'per_node': per_node.to_dict(orient='index'),
-            'last_month': monthly_dict  # Changed from last_24h to last_month
+            'last_month': monthly_dict
         }
         
         # Convert numeric types to native Python types
