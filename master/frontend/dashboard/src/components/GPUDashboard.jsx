@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
+import { Card, CardHeader, CardTitle, CardContent, CollapsibleCard } from './ui/card';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Activity, Server, Users, Cpu } from 'lucide-react';
+import { Activity, Server, Users, Cpu, Database, Clock, AlertCircle } from 'lucide-react';
 
 const GPUDashboard = () => {
   const [data, setData] = useState(null);
@@ -11,7 +11,8 @@ const GPUDashboard = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch('http://localhost:5000/report');
+        const serverAddress = import.meta.env.VITE_SERVER_ADDRESS;
+        const response = await fetch(`http://${serverAddress}:5000/report`);
         const result = await response.json();
         setData(result);
         setLoading(false);
@@ -22,33 +23,37 @@ const GPUDashboard = () => {
     };
 
     fetchData();
-    const interval = setInterval(fetchData, 60000); // Refresh every minute
+    const interval = setInterval(fetchData, 60000);
     return () => clearInterval(interval);
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <Activity className="w-8 h-8 animate-spin text-blue-500" />
-        <span className="ml-2">Loading dashboard...</span>
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="flex items-center justify-center h-80">
+      <Activity className="w-6 h-6 animate-spin text-blue-500" />
+    </div>
+  );
 
-  if (error) {
-    return (
-      <div className="flex items-center justify-center h-screen text-red-500">
-        <span>{error}</span>
+  if (error) return (
+    <div className="flex items-center justify-center h-80">
+      <div className="p-3 bg-red-50 rounded-lg border border-red-100 flex items-center space-x-2">
+        <AlertCircle className="w-5 h-5 text-red-500" />
+        <span className="text-red-600 text-sm font-medium">{error}</span>
       </div>
-    );
-  }
+    </div>
+  );
 
-  // Transform data for the charts
-  const userChartData = Object.entries(data.per_user).map(([username, stats]) => ({
-    name: username,
-    'Average Memory': Math.round(stats.avg_memory),
-    'Additional to Max': Math.round(stats.max_memory - stats.avg_memory) // This represents the difference
-  }));
+  const userChartData = Object.entries(data.per_user).map(([username, stats]) => {
+    const userNodeEntry = Object.entries(data.last_month).find(([_, entry]) => 
+      entry.username === username
+    );
+    
+    return {
+      name: username,
+      'Average Memory': Math.round(stats.avg_memory),
+      'Additional to Max': Math.round(stats.max_memory - stats.avg_memory),
+      nodeName: userNodeEntry ? userNodeEntry[1].hostname : 'Unknown'
+    };
+  });
 
   const nodeChartData = Object.entries(data.per_node).map(([hostname, stats]) => ({
     name: hostname,
@@ -56,136 +61,197 @@ const GPUDashboard = () => {
     'Active Users': stats.unique_users
   }));
 
-  // Update the total GPUs calculation in the GPUDashboard component
-  const totalGPUs = Object.entries(data.per_node).reduce((total, [_, stats]) => {
-        // Each node reports its total GPUs through the unique_users field
-        // We sum across nodes to get total cluster GPUs
-        return total + Math.max(...Object.values(data.last_24h)
-        .filter(entry => entry.hostname === _)
-        .map(entry => entry.gpus_used));
-    }, 0);
+  const totalGPUs = Object.entries(data.per_node).reduce((total, [hostname, stats]) => {
+    return total + Math.max(...Object.values(data.last_month)
+      .filter(entry => entry.hostname === hostname)
+      .map(entry => entry.gpus_used));
+  }, 0);
+
+  const CustomizedLabel = (props) => {
+    const { x, y, width, payload } = props;
+    if (!payload || !payload.nodeName) return null;
+    
+    return (
+      <text
+        x={x + width / 2}
+        y={y - 6}
+        fill="#666"
+        textAnchor="middle"
+        fontSize="11"
+      >
+        {payload.nodeName}
+      </text>
+    );
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold mb-8">GPU Cluster Monitoring Dashboard</h1>
-        
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Active Users</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {Object.keys(data.per_user).length}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Active Nodes</CardTitle>
-              <Server className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {Object.keys(data.per_node).length}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total GPUs in Use</CardTitle>
-                <Cpu className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-                <div className="text-2xl font-bold">
-                {totalGPUs}
-                </div>
-            </CardContent>
-         </Card>
+    <div className="max-w-5xl mx-auto px-4 py-6 min-h-screen">
+      {/* Header Section */}
+      <div className="mb-6 bg-slate-100 rounded-lg p-4">
+        <div className="flex items-baseline justify-between">
+          <h1 className="text-2xl font-bold text-slate-800">NodeTrack Dashboard</h1>
+          {data.date_range && (
+            <p className="text-xs text-slate-500">
+              {new Date(data.date_range.start).toLocaleString()} - {new Date(data.date_range.end).toLocaleString()}
+            </p>
+          )}
         </div>
+        <p className="text-sm text-slate-600 mt-1">High-Performance Computing Resource Monitor</p>
+      </div>
 
-        {/* Memory Usage by User */}
-        <Card className="mb-8">
-            <CardHeader>
-                <CardTitle>Memory Usage by User</CardTitle>
-            </CardHeader>
-            <CardContent className="h-96">
-                <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={userChartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <Tooltip 
-                    formatter={(value, name, props) => {
-                        if (name === 'Additional to Max') {
-                        const baseValue = props.payload['Average Memory'];
-                        return [`Max: ${baseValue + value} MB`, 'Max Memory'];
-                        }
-                        return [`${value} MB`, 'Average Memory'];
-                    }}
-                    />
-                    <Legend />
-                    <Bar dataKey="Average Memory" stackId="a" fill="#8b5cf6" /> {/* Purple for average */}
-                    <Bar dataKey="Additional to Max" stackId="a" fill="#10b981" /> {/* Green for the difference to max */}
-                </BarChart>
-                </ResponsiveContainer>
-            </CardContent>
+      {/* Metrics Overview */}
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        <Card className="bg-white shadow-md hover:shadow-lg transition-all duration-200 rounded-lg border border-slate-100">
+          <div className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="p-1.5 bg-blue-50 rounded-md">
+                <Users className="h-4 w-4 text-blue-500" />
+              </div>
+              <h3 className="text-sm font-medium text-slate-600">Active Users</h3>
+            </div>
+            <div className="text-2xl font-bold text-slate-800">{Object.keys(data.per_user).length}</div>
+          </div>
         </Card>
-        {/* Node Utilization */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Node Utilization</CardTitle>
-          </CardHeader>
-          <CardContent className="h-96">
+
+        <Card className="bg-white shadow-md hover:shadow-lg transition-all duration-200 rounded-lg border border-slate-100">
+          <div className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="p-1.5 bg-emerald-50 rounded-md">
+                <Server className="h-4 w-4 text-emerald-500" />
+              </div>
+              <h3 className="text-sm font-medium text-slate-600">Active Nodes</h3>
+            </div>
+            <div className="text-2xl font-bold text-slate-800">{Object.keys(data.per_node).length}</div>
+          </div>
+        </Card>
+
+        <Card className="bg-white shadow-md hover:shadow-lg transition-all duration-200 rounded-lg border border-slate-100">
+          <div className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="p-1.5 bg-violet-50 rounded-md">
+                <Cpu className="h-4 w-4 text-violet-500" />
+              </div>
+              <h3 className="text-sm font-medium text-slate-600">GPUs in Use</h3>
+            </div>
+            <div className="text-2xl font-bold text-slate-800">{totalGPUs}</div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Charts Section */}
+      <div className="space-y-4">
+        <CollapsibleCard
+          title={
+            <div className="flex items-center space-x-2">
+              <div className="p-1.5 bg-blue-50 rounded-md">
+                <Database className="h-4 w-4 text-blue-500" />
+              </div>
+              <span className="text-sm font-medium text-slate-700">Memory Usage Distribution</span>
+            </div>
+          }
+          className="bg-white shadow-md rounded-lg border border-slate-100 overflow-hidden"
+        >
+          <div className="h-72 p-4">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={nodeChartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="Average Memory (MB)" fill="#8884d8" />
-                <Bar dataKey="Active Users" fill="#82ca9d" />
+              <BarChart data={userChartData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 11 }} />
+                <YAxis tick={{ fill: '#64748b', fontSize: 11 }} />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    boxShadow: '0 2px 4px -1px rgba(0,0,0,0.05), 0 1px 2px -1px rgba(0,0,0,0.05)',
+                    fontSize: '12px'
+                  }}
+                  formatter={(value, name, props) => {
+                    if (name === 'Additional to Max') {
+                      const baseValue = props.payload['Average Memory'];
+                      return [`Max: ${baseValue + value} MB`, 'Maximum Memory'];
+                    }
+                    return [`${value} MB`, 'Average Memory'];
+                  }}
+                />
+                <Legend wrapperStyle={{ fontSize: '11px' }} />
+                <Bar dataKey="Average Memory" stackId="a" fill="#3b82f6" />
+                <Bar dataKey="Additional to Max" stackId="a" fill="#10b981" label={CustomizedLabel} />
               </BarChart>
             </ResponsiveContainer>
-          </CardContent>
-        </Card>
+          </div>
+        </CollapsibleCard>
 
-        {/* Recent Activity Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Last 24 Hours Activity</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left p-4">User</th>
-                    <th className="text-left p-4">Node</th>
-                    <th className="text-left p-4">Avg Memory (MB)</th>
-                    <th className="text-left p-4">GPUs Used</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(data.last_24h).map(([key, stats]) => (
-                    <tr key={key} className="border-b hover:bg-gray-50">
-                      <td className="p-4">{stats.username}</td>
-                      <td className="p-4">{stats.hostname}</td>
-                      <td className="p-4">{Math.round(stats.avg_memory)}</td>
-                      <td className="p-4">{stats.gpus_used}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <CollapsibleCard
+          title={
+            <div className="flex items-center space-x-2">
+              <div className="p-1.5 bg-emerald-50 rounded-md">
+                <Server className="h-4 w-4 text-emerald-500" />
+              </div>
+              <span className="text-sm font-medium text-slate-700">Node Utilization Analysis</span>
             </div>
-          </CardContent>
-        </Card>
+          }
+          className="bg-white shadow-md rounded-lg border border-slate-100 overflow-hidden"
+        >
+          <div className="h-72 p-4">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={nodeChartData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 11 }} />
+                <YAxis tick={{ fill: '#64748b', fontSize: 11 }} />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    boxShadow: '0 2px 4px -1px rgba(0,0,0,0.05), 0 1px 2px -1px rgba(0,0,0,0.05)',
+                    fontSize: '12px'
+                  }}
+                />
+                <Legend wrapperStyle={{ fontSize: '11px' }} />
+                <Bar dataKey="Average Memory (MB)" fill="#3b82f6" />
+                <Bar dataKey="Active Users" fill="#10b981" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </CollapsibleCard>
+
+        <CollapsibleCard
+          title={
+            <div className="flex items-center space-x-2">
+              <div className="p-1.5 bg-violet-50 rounded-md">
+                <Clock className="h-4 w-4 text-violet-500" />
+              </div>
+              <span className="text-sm font-medium text-slate-700">Monthly Activity Log</span>
+            </div>
+          }
+          className="bg-white shadow-md rounded-lg border border-slate-100 overflow-hidden"
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/50">
+                  <th className="text-left py-2 px-3 text-xs font-medium text-slate-500">User</th>
+                  <th className="text-left py-2 px-3 text-xs font-medium text-slate-500">Node</th>
+                  <th className="text-left py-2 px-3 text-xs font-medium text-slate-500">Avg Memory (MB)</th>
+                  <th className="text-left py-2 px-3 text-xs font-medium text-slate-500">GPUs Used</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(data.last_month).map(([key, stats]) => (
+                  <tr 
+                    key={key} 
+                    className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors duration-150"
+                  >
+                    <td className="py-2 px-3 text-xs text-slate-700">{stats.username}</td>
+                    <td className="py-2 px-3 text-xs text-slate-700">{stats.hostname}</td>
+                    <td className="py-2 px-3 text-xs text-slate-700">{Math.round(stats.avg_memory)}</td>
+                    <td className="py-2 px-3 text-xs text-slate-700">{stats.gpus_used}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CollapsibleCard>
       </div>
     </div>
   );
