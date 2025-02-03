@@ -206,7 +206,6 @@ const GPUDashboard = () => {
                   <th className="text-left py-2 px-3 text-xs font-medium text-slate-500">Nodes Used</th>
                   <th className="text-right py-2 px-3 text-xs font-medium text-slate-500">Avg Memory (MB)</th>
                   <th className="text-right py-2 px-3 text-xs font-medium text-slate-500">GPUs Used</th>
-                  <th className="text-right py-2 px-3 text-xs font-medium text-slate-500">Usage Count</th>
                 </tr>
               </thead>
               <tbody>
@@ -219,7 +218,6 @@ const GPUDashboard = () => {
                     <td className="py-2 px-3 text-xs text-slate-700">{stats.nodes_used}</td>
                     <td className="py-2 px-3 text-xs text-slate-700 text-right">{Math.round(stats.avg_memory).toLocaleString()}</td>
                     <td className="py-2 px-3 text-xs text-slate-700 text-right">{stats.gpus_used}</td>
-                    <td className="py-2 px-3 text-xs text-slate-700 text-right">{stats.usage_count.toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>

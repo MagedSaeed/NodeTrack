@@ -97,11 +97,11 @@ def generate_report():
         
         # Generate summary statistics
         per_user = df.groupby('username').agg({
-            'memory_used': ['mean', 'max', 'min', 'count'],
+            'memory_used': ['mean', 'max', 'min'],
             'hostname': 'nunique',
             'gpu_id': 'nunique'
         })
-        per_user.columns = ['avg_memory', 'max_memory', 'min_memory', 'usage_count', 'nodes_used', 'gpus_used']
+        per_user.columns = ['avg_memory', 'max_memory', 'min_memory', 'nodes_used', 'gpus_used']
         
         per_node = df.groupby('hostname').agg({
             'username': 'nunique',
