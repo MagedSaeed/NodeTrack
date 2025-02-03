@@ -1,4 +1,3 @@
-# collector_server.py
 import os
 from flask import Flask, request, jsonify
 import json
@@ -11,13 +10,10 @@ app = Flask(__name__, static_folder='../frontend/dashboard/dist')
 CORS(app)
 
 DATA_DIR = os.environ.get('SERVER_DATA_DIR')
-
 if not DATA_DIR:
     DATA_DIR = './data'
 
 LOG_FILE = f'{DATA_DIR}/cluster_gpu_usage.log'
-
-# Add excluded users
 EXCLUDED_USERS = {'gdm'}
 
 def clean_nan_values(obj):
@@ -33,6 +29,34 @@ def clean_nan_values(obj):
         return 0.0
     return obj
 
+def get_time_series_data(df, period='minute'):
+    """
+    Generate time series data with specified aggregation period
+    """
+    # Ensure timestamp is datetime
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    
+    # Define aggregation periods
+    period_map = {
+        'minute': '1min',
+        'hour': '1h',
+        'day': '1D',
+        'week': '1W',
+        'month': '1M'
+    }
+    
+    # Resample and aggregate data
+    resampled = df.resample(period_map[period], on='timestamp').agg({
+        'memory_used': ['mean', 'max', 'min'],
+        'gpu_id': 'nunique',
+        'username': 'nunique'
+    }).reset_index()
+    
+    # Flatten column names
+    resampled.columns = ['timestamp', 'avg_memory', 'max_memory', 'min_memory', 'gpus_used', 'unique_users']
+    
+    return resampled.to_dict(orient='records')
+
 @app.route('/submit', methods=['POST'])
 def submit_data():
     data = request.get_json()
@@ -44,52 +68,65 @@ def submit_data():
 @app.route('/report', methods=['GET'])
 def generate_report():
     try:
+        # Get date range from query parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        period = request.args.get('period', 'hour')
+        
+        # Read data
         df = pd.DataFrame([json.loads(line) for line in open(LOG_FILE)])
         df = df[~df['username'].isin(EXCLUDED_USERS)]
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
         
-        current_time = datetime.now()
-        last_month = current_time - timedelta(days=30)
-        recent_df = df[pd.to_datetime(df['timestamp']) > last_month]
+        # Filter by date range if provided
+        if start_date and end_date:
+            start_time = pd.to_datetime(start_date)
+            end_time = pd.to_datetime(end_date)
+            df = df[(df['timestamp'] >= start_time) & (df['timestamp'] <= end_time)]
+        else:
+            # Default to last 30 days
+            end_time = datetime.now()
+            start_time = end_time - timedelta(days=30)
+            df = df[df['timestamp'] >= start_time]
         
-        date_range = {
-            'start': last_month.strftime('%Y-%m-%d %H:%M:%S'),
-            'end': current_time.strftime('%Y-%m-%d %H:%M:%S')
-        }
+        # Generate time series data
+        time_series = get_time_series_data(df, period)
         
+        # Generate summary statistics
         per_user = df.groupby('username').agg({
-            'memory_used': ['mean', 'max', 'count'],
+            'memory_used': ['mean', 'max', 'min', 'count'],
             'hostname': 'nunique',
             'gpu_id': 'nunique'
         })
-        
-        per_user.columns = ['avg_memory', 'max_memory', 'usage_count', 'nodes_used', 'gpus_used']
+        per_user.columns = ['avg_memory', 'max_memory', 'min_memory', 'usage_count', 'nodes_used', 'gpus_used']
         
         per_node = df.groupby('hostname').agg({
             'username': 'nunique',
-            'memory_used': 'mean'
+            'memory_used': ['mean', 'max', 'min'],
+            'gpu_id': 'nunique'  # Add GPU count per node
         })
-        per_node.columns = ['unique_users', 'avg_memory']
+        per_node.columns = ['unique_users', 'avg_memory', 'max_memory', 'min_memory', 'total_gpus']
         
-        monthly_stats = recent_df.groupby(['username', 'hostname']).agg({
-            'memory_used': 'mean',
-            'gpu_id': 'nunique'
-        }).reset_index()
+        # Calculate total GPUs
+        total_gpus = per_node['total_gpus'].sum()
         
-        monthly_dict = {}
-        for _, row in monthly_stats.iterrows():
-            key = f"{row['username']}_{row['hostname']}"
-            monthly_dict[key] = {
-                'avg_memory': float(row['memory_used']),
-                'gpus_used': int(row['gpu_id']),
-                'username': row['username'],
-                'hostname': row['hostname']
-            }
-
         reports = {
-            'date_range': date_range,
+            'date_range': {
+                'start': start_time.strftime('%Y-%m-%d %h:%M:%S'),
+                'end': end_time.strftime('%Y-%m-%d %h:%M:%S')
+            },
+            'time_series': time_series,
             'per_user': per_user.to_dict(orient='index'),
             'per_node': per_node.to_dict(orient='index'),
-            'last_month': monthly_dict
+            'summary': {
+                'total_memory': float(df['memory_used'].sum()),
+                'avg_memory': float(df['memory_used'].mean()),
+                'max_memory': float(df['memory_used'].max()),
+                'min_memory': float(df['memory_used'].min()),
+                'total_users': int(df['username'].nunique()),
+                'total_nodes': int(df['hostname'].nunique()),
+                'total_gpus': int(total_gpus)
+            }
         }
         
         # Clean NaN values before sending response
