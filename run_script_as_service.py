@@ -21,7 +21,6 @@ class ServiceManager:
             log_dir: Directory for log files (defaults to current directory)
         """
         if script_path:
-            print("script path is:", script_path)
             self.script_path = Path(script_path).resolve()
             if not self.script_path.exists():
                 raise FileNotFoundError(f"Script not found: {script_path}")
