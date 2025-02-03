@@ -22,3 +22,8 @@ for help:
 ```python
 python run_script_as_service.py client/collect.py -h
 ```
+
+to reset VITE env vars:
+```bash
+for var in ${(k)parameters}; do [[ $var == VITE_* ]] && unset $var; done
+```

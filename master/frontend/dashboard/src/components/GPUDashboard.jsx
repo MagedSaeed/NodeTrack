@@ -16,10 +16,9 @@ const GPUDashboard = () => {
       setLoading(true);
       const serverAddress = import.meta.env.VITE_SERVER_ADDRESS;
       const response = await fetch(
-        `http://${serverAddress}:5000/report?start_date=${startDate}&end_date=${endDate}`
+        `http://${serverAddress}:5000/report`
       );
       const result = await response.json();
-      console.log('results are',result)
       setData(result);
       setLoading(false);
     } catch (err) {
@@ -60,6 +59,7 @@ const GPUDashboard = () => {
     );
   }
 
+  // Fixed: Properly transform node data for the chart
   const nodeChartData = Object.entries(data.per_node).map(([hostname, stats]) => ({
     name: hostname,
     'Average Memory (MB)': Math.round(stats.avg_memory || 0),
@@ -140,8 +140,10 @@ const GPUDashboard = () => {
 
       {/* Charts Section */}
       <div className="space-y-4">
+        {/* Time Series Utilization Card */}
         <TimeSeriesUtilizationCard data={data} />
 
+        {/* Node Utilization Analysis - Fixed Chart */}
         <CollapsibleCard
           title={
             <div className="flex items-center space-x-2">
@@ -157,7 +159,14 @@ const GPUDashboard = () => {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={nodeChartData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 11 }} />
+                <XAxis 
+                  dataKey="name" 
+                  tick={{ fill: '#64748b', fontSize: 11 }}
+                  interval={0}
+                  angle={-45}
+                  textAnchor="end"
+                  height={60}
+                />
                 <YAxis tick={{ fill: '#64748b', fontSize: 11 }} />
                 <Tooltip 
                   contentStyle={{ 
@@ -177,6 +186,7 @@ const GPUDashboard = () => {
           </div>
         </CollapsibleCard>
 
+        {/* Activity Log - Fixed Table */}
         <CollapsibleCard
           title={
             <div className="flex items-center space-x-2">
@@ -193,9 +203,10 @@ const GPUDashboard = () => {
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/50">
                   <th className="text-left py-2 px-3 text-xs font-medium text-slate-500">User</th>
-                  <th className="text-left py-2 px-3 text-xs font-medium text-slate-500">Node</th>
-                  <th className="text-left py-2 px-3 text-xs font-medium text-slate-500">Avg Memory (MB)</th>
-                  <th className="text-left py-2 px-3 text-xs font-medium text-slate-500">GPUs Used</th>
+                  <th className="text-left py-2 px-3 text-xs font-medium text-slate-500">Nodes Used</th>
+                  <th className="text-right py-2 px-3 text-xs font-medium text-slate-500">Avg Memory (MB)</th>
+                  <th className="text-right py-2 px-3 text-xs font-medium text-slate-500">GPUs Used</th>
+                  <th className="text-right py-2 px-3 text-xs font-medium text-slate-500">Usage Count</th>
                 </tr>
               </thead>
               <tbody>
@@ -206,8 +217,9 @@ const GPUDashboard = () => {
                   >
                     <td className="py-2 px-3 text-xs text-slate-700">{username}</td>
                     <td className="py-2 px-3 text-xs text-slate-700">{stats.nodes_used}</td>
-                    <td className="py-2 px-3 text-xs text-slate-700">{Math.round(stats.avg_memory)}</td>
-                    <td className="py-2 px-3 text-xs text-slate-700">{stats.gpus_used}</td>
+                    <td className="py-2 px-3 text-xs text-slate-700 text-right">{Math.round(stats.avg_memory).toLocaleString()}</td>
+                    <td className="py-2 px-3 text-xs text-slate-700 text-right">{stats.gpus_used}</td>
+                    <td className="py-2 px-3 text-xs text-slate-700 text-right">{stats.usage_count.toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>
