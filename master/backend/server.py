@@ -16,6 +16,9 @@ if not DATA_DIR:
 LOG_FILE = f'{DATA_DIR}/cluster_gpu_usage.log'
 EXCLUDED_USERS = {'gdm'}
 
+# Add excluded users
+EXCLUDED_USERS = {'gdm','?','NT AUTHORITY\SYSTEM',}
+
 def clean_nan_values(obj):
     if isinstance(obj, dict):
         return {k: clean_nan_values(v) for k, v in obj.items()}

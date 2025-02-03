@@ -170,7 +170,7 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
-
 # custom
+*nodetrack-client-logs*
 .vscode
 data

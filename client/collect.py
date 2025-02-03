@@ -1,6 +1,9 @@
 import time
+from dotenv import load_dotenv
 import os
 from gpu.collect import collect_gpu_stats_and_send
+
+load_dotenv()
 
 UPDATE_INTERVAL = os.getenv("UPDATE_INTERVAL")
 if not UPDATE_INTERVAL:
