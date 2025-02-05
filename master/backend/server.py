@@ -33,14 +33,11 @@ def clean_nan_values(obj):
     return obj
 
 def get_time_series_data(df, period='minute'):
-    """
-    Generate time series data with specified aggregation period
-    """
     # Ensure timestamp is datetime
     df['timestamp'] = pd.to_datetime(df['timestamp'])
     
-    # First, aggregate memory per user per timestamp
-    user_memory = df.groupby(['timestamp', 'username'])['memory_used'].sum().reset_index()
+    # First, aggregate memory per node per timestamp
+    node_memory = df.groupby(['timestamp', 'hostname'])['memory_used'].sum().reset_index()
     
     # Define aggregation periods
     period_map = {
@@ -51,8 +48,8 @@ def get_time_series_data(df, period='minute'):
         'month': '1M'
     }
     
-    # Calculate statistics from user-aggregated values
-    time_stats = user_memory.groupby('timestamp').agg({
+    # Calculate statistics from node-aggregated values
+    time_stats = node_memory.groupby('timestamp').agg({
         'memory_used': ['mean', 'max', 'min']
     }).resample(period_map[period]).agg({
         ('memory_used', 'mean'): 'mean',
@@ -64,18 +61,18 @@ def get_time_series_data(df, period='minute'):
     time_stats.columns = ['avg_memory', 'max_memory', 'min_memory']
     time_stats = time_stats.reset_index()
     
-    # Calculate GPU and user counts
-    gpu_user_counts = df.groupby('timestamp').agg({
+    # Calculate GPU and node counts (instead of users)
+    gpu_node_counts = df.groupby('timestamp').agg({
         'gpu_id': 'nunique',
-        'username': 'nunique'
+        'hostname': 'nunique'  # Changed from username to hostname
     }).resample(period_map[period]).agg({
         'gpu_id': 'max',
-        'username': 'max'
+        'hostname': 'max'
     }).reset_index()
     
     # Merge the results
-    resampled = time_stats.merge(gpu_user_counts, on='timestamp')
-    resampled.columns = ['timestamp', 'avg_memory', 'max_memory', 'min_memory', 'gpus_used', 'unique_users']
+    resampled = time_stats.merge(gpu_node_counts, on='timestamp')
+    resampled.columns = ['timestamp', 'avg_memory', 'max_memory', 'min_memory', 'gpus_used', 'total_nodes']  # Changed unique_users to total_nodes
     
     return resampled.to_dict(orient='records')
 
