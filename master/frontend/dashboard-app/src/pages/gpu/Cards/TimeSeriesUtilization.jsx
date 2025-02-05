@@ -14,6 +14,9 @@ const TIME_PERIODS = {
   MONTH: { label: 'Monthly', value: 'month', days: 365 }
 };
 
+// Helper function to convert MB to GB
+const mbToGb = (mb) => mb / 1024;
+
 const TimeSeriesUtilizationCard = ({ data }) => {
   const [selectedPeriod, setSelectedPeriod] = useState(TIME_PERIODS.HOUR);
   const [filteredData, setFilteredData] = useState([]);
@@ -22,9 +25,9 @@ const TimeSeriesUtilizationCard = ({ data }) => {
     if (!data.time_series) {
       setFilteredData(Object.entries(data.per_user).map(([username, stats]) => ({
         timestamp: username,
-        avg_memory: stats.avg_memory,
-        max_memory: stats.max_memory,
-        min_memory: stats.min_memory || stats.avg_memory
+        avg_memory: mbToGb(stats.avg_memory),
+        max_memory: mbToGb(stats.max_memory),
+        min_memory: mbToGb(stats.min_memory || stats.avg_memory)
       })));
       return;
     }
@@ -57,9 +60,9 @@ const TimeSeriesUtilizationCard = ({ data }) => {
 
     const aggregatedData = Object.entries(groupedData).map(([timestamp, points]) => ({
       timestamp,
-      avg_memory: _.meanBy(points, 'avg_memory'),
-      max_memory: _.maxBy(points, 'max_memory').max_memory,
-      min_memory: _.minBy(points, 'min_memory').min_memory,
+      avg_memory: mbToGb(_.meanBy(points, 'avg_memory')),
+      max_memory: mbToGb(_.maxBy(points, 'max_memory').max_memory),
+      min_memory: mbToGb(_.minBy(points, 'min_memory').min_memory),
       gpus_used: _.maxBy(points, 'gpus_used').gpus_used,
       unique_users: _.maxBy(points, 'unique_users').unique_users
     }));
@@ -131,19 +134,19 @@ const TimeSeriesUtilizationCard = ({ data }) => {
           <div className="p-4 bg-slate-50 rounded-lg">
             <div className="text-sm text-slate-600 mb-2">Average Usage</div>
             <div className="text-2xl font-bold text-slate-800">
-              {Math.round(stats.avg_memory)} MB
+              {stats.avg_memory.toFixed(2)} GB
             </div>
           </div>
           <div className="p-4 bg-slate-50 rounded-lg">
             <div className="text-sm text-slate-600 mb-2">Max Usage</div>
             <div className="text-2xl font-bold text-slate-800">
-              {Math.round(stats.max_memory)} MB
+              {stats.max_memory.toFixed(2)} GB
             </div>
           </div>
           <div className="p-4 bg-slate-50 rounded-lg">
             <div className="text-sm text-slate-600 mb-2">Min Usage</div>
             <div className="text-2xl font-bold text-slate-800">
-              {Math.round(stats.min_memory)} MB
+              {stats.min_memory.toFixed(2)} GB
             </div>
           </div>
           <div className="p-4 bg-slate-50 rounded-lg">
@@ -176,7 +179,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                 tickCount={10}
                 domain={[0, 'auto']}
                 label={{ 
-                  value: 'Memory Usage (MB)', 
+                  value: 'Memory Usage (GB)', 
                   angle: -90, 
                   position: 'insideLeft',
                   style: { 
@@ -197,11 +200,8 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                   fontSize: '12px',
                   padding: '8px'
                 }}
-                formatter={(value) => [`${Math.round(value)} MB`]}
-                labelFormatter={(label) => {
-                  const date = new Date(label);
-                  return `${formatTimeLabel(label)}`
-                }}
+                formatter={(value) => [`${value.toFixed(2)} GB`]}
+                labelFormatter={(label) => formatTimeLabel(label)}
               />
               <Legend 
                 verticalAlign="top"
