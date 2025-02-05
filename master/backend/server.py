@@ -6,7 +6,7 @@ import numpy as np
 from datetime import datetime, timedelta
 from flask_cors import CORS
 
-app = Flask(__name__, static_folder='../frontend/dashboard/dist')
+app = Flask(__name__, static_folder='../frontend/dashboard-app/dist')
 CORS(app)
 
 DATA_DIR = os.environ.get('SERVER_DATA_DIR')

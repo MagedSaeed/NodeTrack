@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Card } from '@/components/ui/card';
+import { Card } from '../../../shared_ui/card';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, 
-  ResponsiveContainer, ReferenceLine, Brush 
+  ResponsiveContainer, Brush 
 } from 'recharts';
-import { Database, AlertCircle } from 'lucide-react';
+import { Database } from 'lucide-react';
 import _ from 'lodash';
 
 const TIME_PERIODS = {
@@ -15,76 +15,10 @@ const TIME_PERIODS = {
   MONTH: { label: 'Monthly', value: 'month', days: 365 }
 };
 
-const formatTimeLabel = (timestamp, period) => {
-  const date = new Date(timestamp);
-  switch (period) {
-    case 'minute':
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    case 'hour':
-      return `${date.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${date.getHours()}:00`;
-    case 'day':
-      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-    case 'week':
-      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-    case 'month':
-      return date.toLocaleDateString([], { month: 'short', year: '2-digit' });
-    default:
-      return date.toLocaleString();
-  }
-};
 
-const TimeSeriesUtilizationCard = ({ data: initialData }) => {
+const TimeSeriesUtilizationCard = ({ data }) => {
   const [selectedPeriod, setSelectedPeriod] = useState(TIME_PERIODS.HOUR);
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const serverAddress = import.meta.env.VITE_SERVER_ADDRESS;
-        const response = await fetch(
-          `http://${serverAddress}:5000/report?period=${selectedPeriod.value}&days=${selectedPeriod.days}`
-        );
-        const result = await response.json();
-        setData(result);
-        setLoading(false);
-      } catch (err) {
-        console.error('Error fetching time series data:', err);
-        // Fallback to using initial data
-        setData(initialData);
-        setLoading(false);
-      }
-    };
-
-    if (initialData) {
-      // Start with initial data while fetching time series
-      setData(initialData);
-      setLoading(false);
-      
-      // Then fetch time series data
-      fetchData();
-    }
-
-    const interval = setInterval(fetchData, 60000); // Refresh every minute
-    return () => clearInterval(interval);
-  }, [selectedPeriod, initialData]);
-
-  if (loading) return (
-    <div className="flex items-center justify-center h-80">
-      <Database className="w-6 h-6 animate-spin text-blue-500" />
-    </div>
-  );
-
-  if (error) return (
-    <div className="flex items-center justify-center h-80">
-      <div className="p-3 bg-red-50 rounded-lg border border-red-100 flex items-center space-x-2">
-        <AlertCircle className="w-5 h-5 text-red-500" />
-        <span className="text-red-600 text-sm font-medium">{error}</span>
-      </div>
-    </div>
-  );
 
   // Calculate statistics from available data
   const stats = data.summary || {

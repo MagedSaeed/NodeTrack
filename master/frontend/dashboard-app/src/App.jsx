@@ -1,11 +1,11 @@
-import GPUDashboard from './components/GPUDashboard'
+import Dashboard from './Dashboard'
 
 function App() {
   return (
     <div className="min-h-screen bg-background">
-      <GPUDashboard />
+      <Dashboard />
     </div>
   )
 }
 
-export default App
+export default Dashboard
