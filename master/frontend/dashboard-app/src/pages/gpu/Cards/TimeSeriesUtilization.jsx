@@ -200,7 +200,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                 formatter={(value) => [`${Math.round(value)} MB`]}
                 labelFormatter={(label) => {
                   const date = new Date(label);
-                  return `${formatTimeLabel(label)} ${date.toLocaleDateString()}`
+                  return `${formatTimeLabel(label)}`
                 }}
               />
               <Legend 
@@ -245,7 +245,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
 
         {data.date_range && (
           <div className="mt-6 text-sm text-slate-500 text-center">
-            Data Range: {new Date(data.date_range.start).toLocaleDateString()} - {new Date(data.date_range.end).toLocaleDateString()}
+            Data Range: {data.date_range.start} - {data.date_range.end}
           </div>
         )}
       </div>
