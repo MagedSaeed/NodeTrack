@@ -14,10 +14,16 @@ const TIME_PERIODS = {
   MONTH: { label: 'Monthly', value: 'month', days: 365 }
 };
 
-// Helper function to generate a random light color with specified opacity
-const generateLightColor = (opacity = 0.25) => {
-  const hue = Math.random() * 360;
-  return `hsla(${hue}, 60%, 75%, ${opacity})`;
+// Improved color generation for better distinction between nodes
+const generateDistinctColors = (count) => {
+  const colors = [];
+  for (let i = 0; i < count; i++) {
+    const hue = (i * 137.508) % 360; // Use golden ratio for maximum distribution
+    const saturation = 65 + Math.random() * 10; // Keep saturation relatively consistent
+    const lightness = 65 + Math.random() * 10; // Keep lightness relatively consistent
+    colors.push(`hsla(${hue}, ${saturation}%, ${lightness}%, 0.7)`);
+  }
+  return colors;
 };
 
 // Helper function to get period key for grouping
@@ -47,17 +53,17 @@ const TimeSeriesUtilizationCard = ({ data }) => {
   const nodeColors = useMemo(() => {
     if (!data?.time_series?.nodes_timeseries) return {};
     
-    return data.time_series.nodes_timeseries.reduce((acc, node) => {
-      const nodeKey = Object.keys(node)[0];
-      acc[nodeKey] = generateLightColor(0.7);
+    const nodes = data.time_series.nodes_timeseries.map(node => Object.keys(node)[0]);
+    const colors = generateDistinctColors(nodes.length);
+    
+    return nodes.reduce((acc, node, index) => {
+      acc[node] = colors[index];
       return acc;
     }, {});
   }, [data?.time_series?.nodes_timeseries]);
 
   useEffect(() => {
-    if (!data?.time_series?.nodes_timeseries) {
-      return;
-    }
+    if (!data?.time_series?.nodes_timeseries) return;
 
     const now = new Date();
     const startDate = new Date(now.getTime() - (selectedPeriod.days * 24 * 60 * 60 * 1000));
@@ -90,10 +96,8 @@ const TimeSeriesUtilizationCard = ({ data }) => {
 
     // Create aggregated data points
     const aggregatedData = sortedTimestamps.map(timestamp => {
-      // Initialize data point with timestamp
       const dataPoint = { timestamp };
 
-      // Add data for each node
       Object.entries(nodeData).forEach(([nodeName, periodData]) => {
         const values = periodData[timestamp] || [];
         if (values.length > 0) {
@@ -101,7 +105,6 @@ const TimeSeriesUtilizationCard = ({ data }) => {
         }
       });
 
-      // Calculate statistics across all nodes for this timestamp
       const allValues = Object.values(nodeData)
         .map(periodData => periodData[timestamp] || [])
         .flat()
@@ -116,10 +119,14 @@ const TimeSeriesUtilizationCard = ({ data }) => {
       return dataPoint;
     });
 
-    setFilteredData(aggregatedData);
+    // Reduce the number of visible points based on the data size
+    const maxPoints = 100; // Maximum number of points to show
+    const skip = Math.ceil(aggregatedData.length / maxPoints);
+    const reducedData = aggregatedData.filter((_, index) => index % skip === 0);
+
+    setFilteredData(reducedData);
   }, [selectedPeriod, data?.time_series?.nodes_timeseries]);
 
-  // Rest of the component remains the same...
   const stats = useMemo(() => ({
     avg_memory: data.time_series?.summary?.hourly_stats?.avg_memory_gb || 0,
     max_memory: data.time_series?.summary?.hourly_stats?.max_memory_gb || 0,
@@ -181,19 +188,19 @@ const TimeSeriesUtilizationCard = ({ data }) => {
         {/* Statistics cards */}
         <div className="grid grid-cols-4 gap-6 mb-8">
           <div className="p-4 bg-slate-50 rounded-lg">
-            <div className="text-sm text-slate-600 mb-2">Average Node Usage</div>
+            <div className="text-sm text-slate-600 mb-2">Average Nodes Usage</div>
             <div className="text-2xl font-bold text-slate-800">
               {stats.avg_memory.toFixed(2)} GB
             </div>
           </div>
           <div className="p-4 bg-slate-50 rounded-lg">
-            <div className="text-sm text-slate-600 mb-2">Max Node Usage</div>
+            <div className="text-sm text-slate-600 mb-2">Max Nodes Usage</div>
             <div className="text-2xl font-bold text-slate-800">
               {stats.max_memory.toFixed(2)} GB
             </div>
           </div>
           <div className="p-4 bg-slate-50 rounded-lg">
-            <div className="text-sm text-slate-600 mb-2">Min Node Usage</div>
+            <div className="text-sm text-slate-600 mb-2">Min Nodes Usage</div>
             <div className="text-2xl font-bold text-slate-800">
               {stats.min_memory.toFixed(2)} GB
             </div>
@@ -219,7 +226,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                 tick={{ fill: '#64748b', fontSize: 12 }}
                 angle={-45}
                 textAnchor="end"
-                interval={0}
+                interval="preserveStartEnd"
                 tickFormatter={formatTimeLabel}
                 height={60}
                 padding={{ left: 10, right: 10 }}
@@ -252,6 +259,13 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                   }
                   return [`${value?.toFixed(2)} GB`, name];
                 }}
+                itemSorter={(item) => {
+                  // Order: 1. Max 2. Avg 3. Min 4. Nodes
+                  if (item.name === 'max_memory') return -4;
+                  if (item.name === 'avg_memory') return -3;
+                  if (item.name === 'min_memory') return -2;
+                  return -10; // nodes
+                }}
                 labelFormatter={(label) => formatTimeLabel(label)}
               />
               <Legend 
@@ -260,27 +274,12 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                 iconType="circle"
                 iconSize={8}
                 wrapperStyle={{ fontSize: '12px', paddingTop: '15px' }}
-                formatter={(value) => {
-                  if (value.startsWith('node_')) {
-                    return `Node: ${value.replace('node_', '')}`;
-                  }
-                  return value;
-                }}
+                payload={[
+                  { value: 'Maximum Memory', type: 'line', color: '#ef4444' },
+                  { value: 'Average Memory', type: 'line', color: '#3b82f6' },
+                  { value: 'Minimum Memory', type: 'line', color: '#22c55e' }
+                ]}
               />
-              
-              {/* Individual node lines */}
-              {Object.entries(nodeColors).map(([nodeKey, color]) => (
-                <Line 
-                  key={nodeKey}
-                  type="monotone" 
-                  dataKey={nodeKey}
-                  stroke={color}
-                  name={nodeKey}
-                  strokeWidth={1}
-                  dot={false}
-                  activeDot={{ r: 4, stroke: color, strokeWidth: 1, fill: 'white' }}
-                />
-              ))}
               
               {/* Statistics lines */}
               <Line 
@@ -312,6 +311,23 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                 dot={false}
                 activeDot={{ r: 6, stroke: '#22c55e', strokeWidth: 2, fill: 'white' }}
               />
+
+              {/* Individual node lines (hidden from legend) */}
+              {Object.entries(nodeColors).map(([nodeKey, color]) => (
+                <Line 
+                  key={nodeKey}
+                  type="monotone" 
+                  dataKey={nodeKey}
+                  stroke={color}
+                  name={nodeKey}
+                  strokeWidth={1}
+                  dot={false}
+                  activeDot={{ r: 4, stroke: color, strokeWidth: 1, fill: 'white' }}
+                  hide={false}
+                  legendType="none"
+                />
+              ))}
+              
               
               <Brush 
                 dataKey="timestamp"
@@ -322,7 +338,10 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                 travellerWidth={10}
                 fill="#f8fafc"
                 padding={{ top: 10 }}
-                tick={{ fontSize: 10, fill: '#64748b' }}
+                tick={{ fontSize: 10, fill: '#44748b' }}
+                gap={10}
+                x={225}
+                width={500}
               />
             </LineChart>
           </ResponsiveContainer>
