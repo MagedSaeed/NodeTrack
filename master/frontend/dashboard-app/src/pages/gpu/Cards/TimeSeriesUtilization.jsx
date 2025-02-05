@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card } from '../../../shared_ui/Card';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, 
@@ -14,74 +14,121 @@ const TIME_PERIODS = {
   MONTH: { label: 'Monthly', value: 'month', days: 365 }
 };
 
-// Helper function to convert MB to GB
-const mbToGb = (mb) => mb / 1024;
+// Helper function to generate a random light color with specified opacity
+const generateLightColor = (opacity = 0.25) => {
+  const hue = Math.random() * 360;
+  return `hsla(${hue}, 60%, 75%, ${opacity})`;
+};
+
+// Helper function to get period key for grouping
+const getPeriodKey = (date, period) => {
+  const d = new Date(date);
+  switch (period) {
+    case 'hour':
+      return d.toISOString().slice(0, 13); // YYYY-MM-DDTHH
+    case 'day':
+      return d.toISOString().slice(0, 10); // YYYY-MM-DD
+    case 'week':
+      const weekStart = new Date(d);
+      weekStart.setDate(d.getDate() - d.getDay());
+      return weekStart.toISOString().slice(0, 10);
+    case 'month':
+      return d.toISOString().slice(0, 7); // YYYY-MM
+    default:
+      return d.toISOString();
+  }
+};
 
 const TimeSeriesUtilizationCard = ({ data }) => {
   const [selectedPeriod, setSelectedPeriod] = useState(TIME_PERIODS.HOUR);
   const [filteredData, setFilteredData] = useState([]);
 
+  // Get unique nodes and assign colors
+  const nodeColors = useMemo(() => {
+    if (!data?.time_series?.nodes_timeseries) return {};
+    
+    return data.time_series.nodes_timeseries.reduce((acc, node) => {
+      const nodeKey = Object.keys(node)[0];
+      acc[nodeKey] = generateLightColor(0.7);
+      return acc;
+    }, {});
+  }, [data?.time_series?.nodes_timeseries]);
+
   useEffect(() => {
-    if (!data.time_series) {
-      // Handle per-node stats if time series is not available
-      setFilteredData(Object.entries(data.per_node).map(([nodename, stats]) => ({
-        timestamp: nodename,
-        avg_memory: mbToGb(stats.avg_memory),
-        max_memory: mbToGb(stats.max_memory),
-        min_memory: mbToGb(stats.min_memory || stats.avg_memory)
-      })));
+    if (!data?.time_series?.nodes_timeseries) {
       return;
     }
 
     const now = new Date();
     const startDate = new Date(now.getTime() - (selectedPeriod.days * 24 * 60 * 60 * 1000));
 
-    const filteredTimeData = data.time_series.filter(point => {
-      const pointDate = new Date(point.timestamp);
-      return pointDate >= startDate && pointDate <= now;
+    // First, collect all timestamps and initialize the map
+    const allTimestamps = new Set();
+    const nodeData = {};
+    
+    // Initialize node data structure
+    data.time_series.nodes_timeseries.forEach(node => {
+      const [nodeName, timeseries] = Object.entries(node)[0];
+      nodeData[nodeName] = {};
+      
+      timeseries.forEach(point => {
+        const pointDate = new Date(point.timestamp);
+        if (pointDate >= startDate && pointDate <= now) {
+          const periodKey = getPeriodKey(pointDate, selectedPeriod.value);
+          allTimestamps.add(periodKey);
+          
+          if (!nodeData[nodeName][periodKey]) {
+            nodeData[nodeName][periodKey] = [];
+          }
+          nodeData[nodeName][periodKey].push(point.memory_used);
+        }
+      });
     });
 
-    const groupedData = _.groupBy(filteredTimeData, point => {
-      const date = new Date(point.timestamp);
-      switch (selectedPeriod.value) {
-        case 'hour':
-          return date.toISOString().slice(0, 13);
-        case 'day':
-          return date.toISOString().slice(0, 10);
-        case 'week':
-          const weekStart = new Date(date);
-          weekStart.setDate(date.getDate() - date.getDay());
-          return weekStart.toISOString().slice(0, 10);
-        case 'month':
-          return date.toISOString().slice(0, 7);
-        default:
-          return date.toISOString().slice(0, 13);
+    // Convert timestamps to sorted array
+    const sortedTimestamps = Array.from(allTimestamps).sort();
+
+    // Create aggregated data points
+    const aggregatedData = sortedTimestamps.map(timestamp => {
+      // Initialize data point with timestamp
+      const dataPoint = { timestamp };
+
+      // Add data for each node
+      Object.entries(nodeData).forEach(([nodeName, periodData]) => {
+        const values = periodData[timestamp] || [];
+        if (values.length > 0) {
+          dataPoint[nodeName] = _.mean(values);
+        }
+      });
+
+      // Calculate statistics across all nodes for this timestamp
+      const allValues = Object.values(nodeData)
+        .map(periodData => periodData[timestamp] || [])
+        .flat()
+        .filter(val => val !== undefined);
+
+      if (allValues.length > 0) {
+        dataPoint.max_memory = Math.max(...allValues);
+        dataPoint.min_memory = Math.min(...allValues);
+        dataPoint.avg_memory = _.mean(allValues);
       }
+
+      return dataPoint;
     });
 
-    const aggregatedData = Object.entries(groupedData).map(([timestamp, points]) => ({
-      timestamp,
-      avg_memory: mbToGb(_.meanBy(points, 'avg_memory')),
-      max_memory: mbToGb(_.maxBy(points, 'max_memory').max_memory),
-      min_memory: mbToGb(_.minBy(points, 'min_memory').min_memory),
-      gpus_used: _.maxBy(points, 'gpus_used').gpus_used,
-      total_nodes: _.maxBy(points, 'total_nodes').total_nodes  // Changed from unique_users
-    }));
+    setFilteredData(aggregatedData);
+  }, [selectedPeriod, data?.time_series?.nodes_timeseries]);
 
-    const sortedData = _.sortBy(aggregatedData, 'timestamp');
-    setFilteredData(sortedData);
-  }, [selectedPeriod, data]);
-
-  // Update stats to use the new node-based memory metrics
-  const stats = {
-    avg_memory: _.meanBy(filteredData, 'avg_memory') || mbToGb(data.summary.avg_memory_per_node),
-    max_memory: _.maxBy(filteredData, 'max_memory')?.max_memory || mbToGb(data.summary.max_memory_per_node),
-    min_memory: _.minBy(filteredData, 'min_memory')?.min_memory || mbToGb(data.summary.min_memory_per_node),
-    total_nodes: data.summary.total_nodes  // Changed from total_users
-  };
+  // Rest of the component remains the same...
+  const stats = useMemo(() => ({
+    avg_memory: data.time_series?.summary?.hourly_stats?.avg_memory_gb || 0,
+    max_memory: data.time_series?.summary?.hourly_stats?.max_memory_gb || 0,
+    min_memory: data.time_series?.summary?.hourly_stats?.min_memory_gb || 0,
+    total_nodes: data.time_series?.summary?.total_nodes || 0
+  }), [data.time_series?.summary]);
 
   const formatTimeLabel = (timestamp) => {
-    if (!data.time_series) return timestamp;
+    if (!timestamp) return '';
     
     const date = new Date(timestamp);
     if (isNaN(date.getTime())) {
@@ -105,6 +152,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
   return (
     <Card className="bg-white shadow-md rounded-lg border border-slate-100 overflow-hidden">
       <div className="p-6">
+        {/* Card header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-2">
             <div className="p-2 bg-blue-50 rounded-md">
@@ -113,34 +161,33 @@ const TimeSeriesUtilizationCard = ({ data }) => {
             <span className="text-base font-medium text-slate-700">Node Memory Usage Over Time</span>
           </div>
           
-          {data.time_series && (
-            <div className="flex flex-wrap gap-2">
-              {Object.values(TIME_PERIODS).map((period) => (
-                <button
-                  key={period.value}
-                  onClick={() => setSelectedPeriod(period)}
-                  className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
-                    selectedPeriod.value === period.value
-                      ? 'bg-blue-100 text-blue-700 font-medium'
-                      : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-                  }`}
-                >
-                  {period.label}
-                </button>
-              ))}
-            </div>
-          )}
+          <div className="flex flex-wrap gap-2">
+            {Object.values(TIME_PERIODS).map((period) => (
+              <button
+                key={period.value}
+                onClick={() => setSelectedPeriod(period)}
+                className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
+                  selectedPeriod.value === period.value
+                    ? 'bg-blue-100 text-blue-700 font-medium'
+                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                {period.label}
+              </button>
+            ))}
+          </div>
         </div>
         
+        {/* Statistics cards */}
         <div className="grid grid-cols-4 gap-6 mb-8">
           <div className="p-4 bg-slate-50 rounded-lg">
-            <div className="text-sm text-slate-600 mb-2">Average Nodes Usage</div>
+            <div className="text-sm text-slate-600 mb-2">Average Node Usage</div>
             <div className="text-2xl font-bold text-slate-800">
               {stats.avg_memory.toFixed(2)} GB
             </div>
           </div>
           <div className="p-4 bg-slate-50 rounded-lg">
-            <div className="text-sm text-slate-600 mb-2">Max Average Nodes Usage</div>
+            <div className="text-sm text-slate-600 mb-2">Max Node Usage</div>
             <div className="text-2xl font-bold text-slate-800">
               {stats.max_memory.toFixed(2)} GB
             </div>
@@ -159,8 +206,9 @@ const TimeSeriesUtilizationCard = ({ data }) => {
           </div>
         </div>
 
+        {/* Chart */}
         <div className="h-96">
-        <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%">
             <LineChart 
               data={filteredData} 
               margin={{ top: 10, right: 50, left: 60, bottom: 100 }}
@@ -171,7 +219,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                 tick={{ fill: '#64748b', fontSize: 12 }}
                 angle={-45}
                 textAnchor="end"
-                interval="preserveStartEnd"
+                interval={0}
                 tickFormatter={formatTimeLabel}
                 height={60}
                 padding={{ left: 10, right: 10 }}
@@ -184,11 +232,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                   value: 'Node Memory Usage (GB)', 
                   angle: -90, 
                   position: 'insideLeft',
-                  style: { 
-                    fill: '#64748b',
-                    fontSize: '14px',
-                    textAnchor: 'middle'
-                  },
+                  style: { fill: '#64748b', fontSize: '14px', textAnchor: 'middle' },
                   offset: -20
                 }}
                 width={55}
@@ -203,11 +247,10 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                   padding: '8px'
                 }}
                 formatter={(value, name) => {
-                  // Format the tooltip value and handle node names
                   if (name.startsWith('node_')) {
-                    return [`${mbToGb(value).toFixed(2)} GB`, `Node: ${name.replace('node_', '')}`];
+                    return [`${value?.toFixed(2)} GB`, `Node: ${name.replace('node_', '')}`];
                   }
-                  return [`${value.toFixed(2)} GB`];
+                  return [`${value?.toFixed(2)} GB`, name];
                 }}
                 labelFormatter={(label) => formatTimeLabel(label)}
               />
@@ -216,33 +259,30 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                 height={36}
                 iconType="circle"
                 iconSize={8}
-                wrapperStyle={{ 
-                  fontSize: '12px',
-                  paddingTop: '15px'
-                }}
+                wrapperStyle={{ fontSize: '12px', paddingTop: '15px' }}
                 formatter={(value) => {
-                  // Format legend labels for nodes
                   if (value.startsWith('node_')) {
                     return `Node: ${value.replace('node_', '')}`;
                   }
                   return value;
                 }}
               />
+              
               {/* Individual node lines */}
-              {Object.keys(filteredData[0] || {}).filter(key => key.startsWith('node_')).map((nodeKey, index) => (
+              {Object.entries(nodeColors).map(([nodeKey, color]) => (
                 <Line 
                   key={nodeKey}
                   type="monotone" 
                   dataKey={nodeKey}
-                  stroke={`rgba(59, 130, 246, ${0.2})`}  // Light blue with 0.2 opacity
+                  stroke={color}
                   name={nodeKey}
                   strokeWidth={1}
                   dot={false}
-                  activeDot={{ r: 4, stroke: '#3b82f6', strokeWidth: 1, fill: 'white' }}
-                  legendType="none"  // Hide from legend
+                  activeDot={{ r: 4, stroke: color, strokeWidth: 1, fill: 'white' }}
                 />
               ))}
-              {/* Max Memory Line (dashed) */}
+              
+              {/* Statistics lines */}
               <Line 
                 type="monotone" 
                 dataKey="max_memory" 
@@ -253,17 +293,15 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                 dot={false}
                 activeDot={{ r: 6, stroke: '#ef4444', strokeWidth: 2, fill: 'white' }}
               />
-              {/* Average Memory Line (solid) */}
               <Line 
                 type="monotone" 
                 dataKey="avg_memory" 
                 stroke="#3b82f6"
                 name="Average Memory"
-                strokeWidth={2.5}  // Made slightly thicker to stand out
+                strokeWidth={2.5}
                 dot={false}
                 activeDot={{ r: 6, stroke: '#3b82f6', strokeWidth: 2, fill: 'white' }}
               />
-              {/* Min Memory Line (dashed) */}
               <Line 
                 type="monotone" 
                 dataKey="min_memory" 
@@ -274,22 +312,18 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                 dot={false}
                 activeDot={{ r: 6, stroke: '#22c55e', strokeWidth: 2, fill: 'white' }}
               />
-              {data.time_series && (
-                <Brush 
-                  dataKey="timestamp"
-                  height={30}
-                  stroke="#94a3b8"
-                  tickFormatter={formatTimeLabel}
-                  y={300}
-                  travellerWidth={10}
-                  fill="#f8fafc"
-                  padding={{ top: 10 }}
-                  tick={{ fontSize: 10, fill: '#64748b' }}
-                  gap={10}
-                  x={250}
-                  width={500}
-                />
-              )}
+              
+              <Brush 
+                dataKey="timestamp"
+                height={30}
+                stroke="#94a3b8"
+                tickFormatter={formatTimeLabel}
+                y={300}
+                travellerWidth={10}
+                fill="#f8fafc"
+                padding={{ top: 10 }}
+                tick={{ fontSize: 10, fill: '#64748b' }}
+              />
             </LineChart>
           </ResponsiveContainer>
         </div>

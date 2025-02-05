@@ -174,3 +174,4 @@ cython_debug/
 *nodetrack-client-logs*
 .vscode
 data
+local_notebooks
