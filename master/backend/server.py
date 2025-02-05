@@ -14,7 +14,6 @@ if not DATA_DIR:
     DATA_DIR = './data'
 
 LOG_FILE = f'{DATA_DIR}/cluster_gpu_usage.log'
-EXCLUDED_USERS = {'gdm'}
 
 # Add excluded users
 EXCLUDED_USERS = {'gdm','?','NT AUTHORITY\SYSTEM',}
@@ -61,10 +60,10 @@ def get_time_series_data(df, period='minute'):
     time_stats.columns = ['avg_memory', 'max_memory', 'min_memory']
     time_stats = time_stats.reset_index()
     
-    # Calculate GPU and node counts (instead of users)
+    # Calculate GPU and node counts
     gpu_node_counts = df.groupby('timestamp').agg({
         'gpu_id': 'nunique',
-        'hostname': 'nunique'  # Changed from username to hostname
+        'hostname': 'nunique'
     }).resample(period_map[period]).agg({
         'gpu_id': 'max',
         'hostname': 'max'
@@ -72,10 +71,9 @@ def get_time_series_data(df, period='minute'):
     
     # Merge the results
     resampled = time_stats.merge(gpu_node_counts, on='timestamp')
-    resampled.columns = ['timestamp', 'avg_memory', 'max_memory', 'min_memory', 'gpus_used', 'total_nodes']  # Changed unique_users to total_nodes
+    resampled.columns = ['timestamp', 'avg_memory', 'max_memory', 'min_memory', 'gpus_used', 'total_nodes']
     
     return resampled.to_dict(orient='records')
-
 
 @app.route('/submit', methods=['POST'])
 def submit_data():
@@ -112,37 +110,50 @@ def generate_report():
         # Generate time series data
         time_series = get_time_series_data(df, period)
         
-        # Generate summary statistics
+        # First aggregate memory by node and timestamp
+        node_memory = df.groupby(['timestamp', 'hostname'])['memory_used'].sum().reset_index()
+        
+        # Generate per-user statistics (keeping this for user tracking)
         per_user = df.groupby('username').agg({
-            'memory_used': ['mean', 'max', 'min'],
+            'memory_used': 'sum',  # Changed to sum to get total memory used
             'hostname': 'nunique',
             'gpu_id': 'nunique'
         })
-        per_user.columns = ['avg_memory', 'max_memory', 'min_memory', 'nodes_used', 'gpus_used']
+        per_user.columns = ['total_memory', 'nodes_used', 'gpus_used']
         
-        per_node = df.groupby('hostname').agg({
+        # Generate per-node statistics
+        per_node = df.groupby(['hostname', 'timestamp']).agg({
+            'memory_used': 'sum',
             'username': 'nunique',
-            'memory_used': ['mean', 'max', 'min'],
-            'gpu_id': 'nunique'  # Add GPU count per node
-        })
-        per_node.columns = ['unique_users', 'avg_memory', 'max_memory', 'min_memory', 'total_gpus']
+            'gpu_id': 'nunique'
+        }).reset_index()
         
-        # Calculate total GPUs
-        total_gpus = per_node['total_gpus'].sum()
+        # Calculate final per-node statistics
+        per_node_stats = per_node.groupby('hostname').agg({
+            'memory_used': ['mean', 'max', 'min'],
+            'username': 'max',  # Max number of concurrent users
+            'gpu_id': 'max'  # Total GPUs per node
+        })
+        per_node_stats.columns = ['avg_memory', 'max_memory', 'min_memory', 'max_users', 'total_gpus']
+        
+        # Calculate total GPUs and overall node statistics
+        total_gpus = per_node_stats['total_gpus'].sum()
+        
+        # Calculate node-level summary statistics
+        node_level_summary = node_memory.groupby('timestamp')['memory_used'].agg(['mean', 'max', 'min']).mean()
         
         reports = {
             'date_range': {
-                'start': start_time.strftime('%Y-%m-%d %h:%M:%S'),
-                'end': end_time.strftime('%Y-%m-%d %h:%M:%S')
+                'start': start_time.strftime('%Y-%m-%d %H:%M:%S'),
+                'end': end_time.strftime('%Y-%m-%d %H:%M:%S')
             },
             'time_series': time_series,
             'per_user': per_user.to_dict(orient='index'),
-            'per_node': per_node.to_dict(orient='index'),
+            'per_node': per_node_stats.to_dict(orient='index'),
             'summary': {
-                'total_memory': float(df['memory_used'].sum()),
-                'avg_memory': float(df['memory_used'].mean()),
-                'max_memory': float(df['memory_used'].max()),
-                'min_memory': float(df['memory_used'].min()),
+                'avg_memory_per_node': float(node_level_summary['mean']),
+                'max_memory_per_node': float(node_level_summary['max']),
+                'min_memory_per_node': float(node_level_summary['min']),
                 'total_users': int(df['username'].nunique()),
                 'total_nodes': int(df['hostname'].nunique()),
                 'total_gpus': int(total_gpus)
