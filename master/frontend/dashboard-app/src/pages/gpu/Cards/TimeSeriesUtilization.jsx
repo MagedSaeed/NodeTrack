@@ -23,8 +23,9 @@ const TimeSeriesUtilizationCard = ({ data }) => {
 
   useEffect(() => {
     if (!data.time_series) {
-      setFilteredData(Object.entries(data.per_user).map(([username, stats]) => ({
-        timestamp: username,
+      // Handle per-node stats if time series is not available
+      setFilteredData(Object.entries(data.per_node).map(([nodename, stats]) => ({
+        timestamp: nodename,
         avg_memory: mbToGb(stats.avg_memory),
         max_memory: mbToGb(stats.max_memory),
         min_memory: mbToGb(stats.min_memory || stats.avg_memory)
@@ -64,18 +65,19 @@ const TimeSeriesUtilizationCard = ({ data }) => {
       max_memory: mbToGb(_.maxBy(points, 'max_memory').max_memory),
       min_memory: mbToGb(_.minBy(points, 'min_memory').min_memory),
       gpus_used: _.maxBy(points, 'gpus_used').gpus_used,
-      unique_users: _.maxBy(points, 'unique_users').unique_users
+      total_nodes: _.maxBy(points, 'total_nodes').total_nodes  // Changed from unique_users
     }));
 
     const sortedData = _.sortBy(aggregatedData, 'timestamp');
     setFilteredData(sortedData);
   }, [selectedPeriod, data]);
 
+  // Update stats to use the new node-based memory metrics
   const stats = {
-    avg_memory: _.meanBy(filteredData, 'avg_memory') || data.summary.avg_memory,
-    max_memory: _.maxBy(filteredData, 'max_memory')?.max_memory || data.summary.max_memory,
-    min_memory: _.minBy(filteredData, 'min_memory')?.min_memory || data.summary.min_memory,
-    total_users: data.summary.total_users
+    avg_memory: _.meanBy(filteredData, 'avg_memory') || mbToGb(data.summary.avg_memory_per_node),
+    max_memory: _.maxBy(filteredData, 'max_memory')?.max_memory || mbToGb(data.summary.max_memory_per_node),
+    min_memory: _.minBy(filteredData, 'min_memory')?.min_memory || mbToGb(data.summary.min_memory_per_node),
+    total_nodes: data.summary.total_nodes  // Changed from total_users
   };
 
   const formatTimeLabel = (timestamp) => {
@@ -108,7 +110,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
             <div className="p-2 bg-blue-50 rounded-md">
               <Database className="h-5 w-5 text-blue-500" />
             </div>
-            <span className="text-base font-medium text-slate-700">Memory Usage Over Time</span>
+            <span className="text-base font-medium text-slate-700">Node Memory Usage Over Time</span>
           </div>
           
           {data.time_series && (
@@ -132,33 +134,33 @@ const TimeSeriesUtilizationCard = ({ data }) => {
         
         <div className="grid grid-cols-4 gap-6 mb-8">
           <div className="p-4 bg-slate-50 rounded-lg">
-            <div className="text-sm text-slate-600 mb-2">Average Usage</div>
+            <div className="text-sm text-slate-600 mb-2">Average Nodes Usage</div>
             <div className="text-2xl font-bold text-slate-800">
               {stats.avg_memory.toFixed(2)} GB
             </div>
           </div>
           <div className="p-4 bg-slate-50 rounded-lg">
-            <div className="text-sm text-slate-600 mb-2">Max Usage</div>
+            <div className="text-sm text-slate-600 mb-2">Max Average Nodes Usage</div>
             <div className="text-2xl font-bold text-slate-800">
               {stats.max_memory.toFixed(2)} GB
             </div>
           </div>
           <div className="p-4 bg-slate-50 rounded-lg">
-            <div className="text-sm text-slate-600 mb-2">Min Usage</div>
+            <div className="text-sm text-slate-600 mb-2">Min Node Usage</div>
             <div className="text-2xl font-bold text-slate-800">
               {stats.min_memory.toFixed(2)} GB
             </div>
           </div>
           <div className="p-4 bg-slate-50 rounded-lg">
-            <div className="text-sm text-slate-600 mb-2">Total Users</div>
+            <div className="text-sm text-slate-600 mb-2">Total Nodes</div>
             <div className="text-2xl font-bold text-slate-800">
-              {stats.total_users}
+              {stats.total_nodes}
             </div>
           </div>
         </div>
 
         <div className="h-96">
-          <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%">
             <LineChart 
               data={filteredData} 
               margin={{ top: 10, right: 50, left: 60, bottom: 100 }}
@@ -179,7 +181,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                 tickCount={10}
                 domain={[0, 'auto']}
                 label={{ 
-                  value: 'Memory Usage (GB)', 
+                  value: 'Node Memory Usage (GB)', 
                   angle: -90, 
                   position: 'insideLeft',
                   style: { 
@@ -213,14 +215,37 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                   paddingTop: '15px'
                 }}
               />
+              {/* Max Memory Line (dashed) */}
+              <Line 
+                type="monotone" 
+                dataKey="max_memory" 
+                stroke="#ef4444"  // Red color
+                name="Maximum Memory"
+                strokeWidth={1.5}
+                strokeDasharray="5 5"  // Creates dashed line
+                dot={false}
+                activeDot={{ r: 6, stroke: '#ef4444', strokeWidth: 2, fill: 'white' }}
+              />
+              {/* Average Memory Line (solid) */}
               <Line 
                 type="monotone" 
                 dataKey="avg_memory" 
-                stroke="#3b82f6" 
+                stroke="#3b82f6"  // Blue color
                 name="Average Memory"
                 strokeWidth={2}
                 dot={false}
                 activeDot={{ r: 6, stroke: '#3b82f6', strokeWidth: 2, fill: 'white' }}
+              />
+              {/* Min Memory Line (dashed) */}
+              <Line 
+                type="monotone" 
+                dataKey="min_memory" 
+                stroke="#22c55e"  // Green color
+                name="Minimum Memory"
+                strokeWidth={1.5}
+                strokeDasharray="5 5"  // Creates dashed line
+                dot={false}
+                activeDot={{ r: 6, stroke: '#22c55e', strokeWidth: 2, fill: 'white' }}
               />
               {data.time_series && (
                 <Brush 
