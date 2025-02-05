@@ -1,5 +1,5 @@
 import GPUDashboard from './pages/gpu/Dashboard'
-import Header from './shared_ui/header'
+import Header from './shared_ui/Header'
 import { DateProvider } from './contexts/DateContext'
 
 const Dashboard = () => {

@@ -1,5 +1,5 @@
 import { Clock } from "lucide-react";
-import { CollapsibleCard } from "../../../shared_ui/card";
+import { CollapsibleCard } from "../../../shared_ui/Card";
 
 const ActivityLog = ({ data }) => {
     return (

@@ -1,4 +1,4 @@
-import { Card } from '../../../shared_ui/card';
+import { Card } from '../../../shared_ui/Card';
 import { Server, Users, Cpu } from 'lucide-react';
 const Overview = ({ data }) => { 
     return (

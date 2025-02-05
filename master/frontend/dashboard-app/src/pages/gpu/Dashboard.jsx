@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CollapsibleCard } from '../../shared_ui/card';
+import { CollapsibleCard } from '../../shared_ui/Card';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Activity, Server, Users, Cpu, Clock, AlertCircle } from 'lucide-react';
 import TimeSeriesUtilizationCard from './Cards/TimeSeriesUtilization';

@@ -1,6 +1,6 @@
 import { Server } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { CollapsibleCard } from "../../../shared_ui/card"
+import { CollapsibleCard } from "../../../shared_ui/Card"
 const NodeUtilization = ({ data }) => {
     const nodeChartData = Object.entries(data.per_node).map(([hostname, stats]) => ({
         name: hostname,
