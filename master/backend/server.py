@@ -32,6 +32,9 @@ def clean_nan_values(obj):
     return obj
 
 def get_time_series_data(df, period='minute'):
+    """
+    Generate time series data with specified aggregation period, aggregating by node
+    """
     # Ensure timestamp is datetime
     df['timestamp'] = pd.to_datetime(df['timestamp'])
     
@@ -47,7 +50,7 @@ def get_time_series_data(df, period='minute'):
         'month': '1M'
     }
     
-    # Calculate statistics from node-aggregated values
+    # Calculate overall statistics
     time_stats = node_memory.groupby('timestamp').agg({
         'memory_used': ['mean', 'max', 'min']
     }).resample(period_map[period]).agg({
@@ -60,6 +63,19 @@ def get_time_series_data(df, period='minute'):
     time_stats.columns = ['avg_memory', 'max_memory', 'min_memory']
     time_stats = time_stats.reset_index()
     
+    # Calculate per-node time series
+    node_time_series = {}
+    for hostname in df['hostname'].unique():
+        node_data = node_memory[node_memory['hostname'] == hostname]
+        resampled_node = node_data.set_index('timestamp').resample(period_map[period])['memory_used'].mean()
+        node_time_series[hostname] = resampled_node
+    
+    # Combine all node data with the main time series
+    for timestamp in time_stats['timestamp']:
+        for hostname, series in node_time_series.items():
+            if timestamp in series.index:
+                time_stats[f'node_{hostname}'] = series[timestamp]
+    
     # Calculate GPU and node counts
     gpu_node_counts = df.groupby('timestamp').agg({
         'gpu_id': 'nunique',
@@ -71,7 +87,9 @@ def get_time_series_data(df, period='minute'):
     
     # Merge the results
     resampled = time_stats.merge(gpu_node_counts, on='timestamp')
-    resampled.columns = ['timestamp', 'avg_memory', 'max_memory', 'min_memory', 'gpus_used', 'total_nodes']
+    resampled.columns = ['timestamp', 'avg_memory', 'max_memory', 'min_memory'] + \
+                       [f'node_{hostname}' for hostname in df['hostname'].unique()] + \
+                       ['gpus_used', 'total_nodes']
     
     return resampled.to_dict(orient='records')
 

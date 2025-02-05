@@ -202,7 +202,13 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                   fontSize: '12px',
                   padding: '8px'
                 }}
-                formatter={(value) => [`${value.toFixed(2)} GB`]}
+                formatter={(value, name) => {
+                  // Format the tooltip value and handle node names
+                  if (name.startsWith('node_')) {
+                    return [`${mbToGb(value).toFixed(2)} GB`, `Node: ${name.replace('node_', '')}`];
+                  }
+                  return [`${value.toFixed(2)} GB`];
+                }}
                 labelFormatter={(label) => formatTimeLabel(label)}
               />
               <Legend 
@@ -214,15 +220,36 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                   fontSize: '12px',
                   paddingTop: '15px'
                 }}
+                formatter={(value) => {
+                  // Format legend labels for nodes
+                  if (value.startsWith('node_')) {
+                    return `Node: ${value.replace('node_', '')}`;
+                  }
+                  return value;
+                }}
               />
+              {/* Individual node lines */}
+              {Object.keys(filteredData[0] || {}).filter(key => key.startsWith('node_')).map((nodeKey, index) => (
+                <Line 
+                  key={nodeKey}
+                  type="monotone" 
+                  dataKey={nodeKey}
+                  stroke={`rgba(59, 130, 246, ${0.2})`}  // Light blue with 0.2 opacity
+                  name={nodeKey}
+                  strokeWidth={1}
+                  dot={false}
+                  activeDot={{ r: 4, stroke: '#3b82f6', strokeWidth: 1, fill: 'white' }}
+                  legendType="none"  // Hide from legend
+                />
+              ))}
               {/* Max Memory Line (dashed) */}
               <Line 
                 type="monotone" 
                 dataKey="max_memory" 
-                stroke="#ef4444"  // Red color
+                stroke="#ef4444"
                 name="Maximum Memory"
                 strokeWidth={1.5}
-                strokeDasharray="5 5"  // Creates dashed line
+                strokeDasharray="5 5"
                 dot={false}
                 activeDot={{ r: 6, stroke: '#ef4444', strokeWidth: 2, fill: 'white' }}
               />
@@ -230,9 +257,9 @@ const TimeSeriesUtilizationCard = ({ data }) => {
               <Line 
                 type="monotone" 
                 dataKey="avg_memory" 
-                stroke="#3b82f6"  // Blue color
+                stroke="#3b82f6"
                 name="Average Memory"
-                strokeWidth={2}
+                strokeWidth={2.5}  // Made slightly thicker to stand out
                 dot={false}
                 activeDot={{ r: 6, stroke: '#3b82f6', strokeWidth: 2, fill: 'white' }}
               />
@@ -240,10 +267,10 @@ const TimeSeriesUtilizationCard = ({ data }) => {
               <Line 
                 type="monotone" 
                 dataKey="min_memory" 
-                stroke="#22c55e"  // Green color
+                stroke="#22c55e"
                 name="Minimum Memory"
                 strokeWidth={1.5}
-                strokeDasharray="5 5"  // Creates dashed line
+                strokeDasharray="5 5"
                 dot={false}
                 activeDot={{ r: 6, stroke: '#22c55e', strokeWidth: 2, fill: 'white' }}
               />
