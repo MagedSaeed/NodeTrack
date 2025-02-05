@@ -1,25 +1,83 @@
-# pull latest changes and check for errors
-git pull || { echo "Git pull failed. Aborting deployment."; exit 1; }
+#!/bin/bash
 
-# first stop running images containers
-docker stop $(docker ps -q --filter ancestor=nodetrack-master-backend)
-docker stop $(docker ps -q --filter ancestor=nodetrack-master-frontend)
+# Exit on any error
+set -e
 
-# build docker images
-#--- backend
-docker build -f master/backend/Dockerfile -t nodetrack-master-backend .
-#---
-docker build -f master/frontend/Dockerfile -t nodetrack-master-frontend .
-#---
+# Function to log messages
+log() {
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1"
+}
 
-# run images
-#--- create a data dir
-mkdir -p data
-#--- backend
-docker run -d -p 5000:5000 -v ./data:/app/backend/data nodetrack-master-backend:latest
-#--- frontend
-docker run -d -p 3000:3000/tcp nodetrack-master-frontend:latest
+# Function to cleanup containers and images
+cleanup_containers() {
+    local image_name=$1
+    
+    # Get all container IDs (running and stopped) for the image
+    local containers=$(docker ps -a -q --filter ancestor=$image_name 2>/dev/null || true)
+    
+    if [ ! -z "$containers" ]; then
+        log "Stopping containers for $image_name..."
+        docker stop $containers 2>/dev/null || true
+        
+        log "Removing stopped containers for $image_name..."
+        docker rm $containers 2>/dev/null || true
+    else
+        log "No containers found for $image_name"
+    fi
+}
 
-# cleanup stopped containers with the same images
-docker rm $(docker ps -a -q --filter status=exited --filter ancestor=nodetrack-master-backend)
-docker rm $(docker ps -a -q --filter status=exited --filter ancestor=nodetrack-master-frontend)
+# Function to safely remove dangling images
+cleanup_dangling() {
+    log "Cleaning up dangling images..."
+    docker image prune -f
+}
+
+# Main deployment script
+main() {
+    # Pull latest changes
+    log "Pulling latest changes..."
+    if ! git pull; then
+        log "Git pull failed. Aborting deployment."
+        exit 1
+    fi
+
+    # Cleanup existing containers
+    log "Starting cleanup..."
+    cleanup_containers "nodetrack-master-backend"
+    cleanup_containers "nodetrack-master-frontend"
+
+
+    # Build docker images
+    log "Building backend image..."
+    docker build -f master/backend/Dockerfile -t nodetrack-master-backend .
+    
+    log "Building frontend image..."
+    docker build -f master/frontend/Dockerfile -t nodetrack-master-frontend .
+
+    # Create data directory if it doesn't exist
+    log "Setting up data directory..."
+    mkdir -p data
+
+    # Run new containers
+    log "Starting backend container..."
+    docker run -d \
+        -p 5000:5000 \
+        -v "$(pwd)/data:/app/backend/data" \
+        --name nodetrack-backend \
+        nodetrack-master-backend:latest
+
+    log "Starting frontend container..."
+    docker run -d \
+        -p 3000:3000/tcp \
+        --name nodetrack-frontend \
+        nodetrack-master-frontend:latest
+
+
+    # Cleanup dangling images
+    cleanup_dangling
+
+    log "Deployment completed successfully!"
+}
+
+# Run main function
+main
