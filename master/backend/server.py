@@ -39,6 +39,9 @@ def get_time_series_data(df, period='minute'):
     # Ensure timestamp is datetime
     df['timestamp'] = pd.to_datetime(df['timestamp'])
     
+    # First, aggregate memory per user per timestamp
+    user_memory = df.groupby(['timestamp', 'username'])['memory_used'].sum().reset_index()
+    
     # Define aggregation periods
     period_map = {
         'minute': '1min',
@@ -48,17 +51,34 @@ def get_time_series_data(df, period='minute'):
         'month': '1M'
     }
     
-    # Resample and aggregate data
-    resampled = df.resample(period_map[period], on='timestamp').agg({
-        'memory_used': ['mean', 'max', 'min'],
+    # Calculate statistics from user-aggregated values
+    time_stats = user_memory.groupby('timestamp').agg({
+        'memory_used': ['mean', 'max', 'min']
+    }).resample(period_map[period]).agg({
+        ('memory_used', 'mean'): 'mean',
+        ('memory_used', 'max'): 'max',
+        ('memory_used', 'min'): 'min'
+    })
+    
+    # Flatten the column names
+    time_stats.columns = ['avg_memory', 'max_memory', 'min_memory']
+    time_stats = time_stats.reset_index()
+    
+    # Calculate GPU and user counts
+    gpu_user_counts = df.groupby('timestamp').agg({
         'gpu_id': 'nunique',
         'username': 'nunique'
+    }).resample(period_map[period]).agg({
+        'gpu_id': 'max',
+        'username': 'max'
     }).reset_index()
     
-    # Flatten column names
+    # Merge the results
+    resampled = time_stats.merge(gpu_user_counts, on='timestamp')
     resampled.columns = ['timestamp', 'avg_memory', 'max_memory', 'min_memory', 'gpus_used', 'unique_users']
     
     return resampled.to_dict(orient='records')
+
 
 @app.route('/submit', methods=['POST'])
 def submit_data():

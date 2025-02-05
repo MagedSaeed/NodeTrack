@@ -228,7 +228,6 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                   height={30}
                   stroke="#94a3b8"
                   tickFormatter={formatTimeLabel}
-                  startIndex={Math.max(0, filteredData.length - 20)}
                   y={300}
                   travellerWidth={10}
                   fill="#f8fafc"
