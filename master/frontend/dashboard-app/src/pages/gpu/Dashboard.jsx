@@ -3,7 +3,6 @@ import { Activity, AlertCircle } from 'lucide-react';
 import TimeSeriesUtilizationCard from './Cards/TimeSeriesUtilization';
 import { useDateRange } from '../../contexts/DateContext';
 import Overview from './Cards/Overview';
-import NodeUtilization from './Cards/NodeUtilization';
 import ActivityLog from './Cards/ActivityLog';
 
 const GPU = () => {
