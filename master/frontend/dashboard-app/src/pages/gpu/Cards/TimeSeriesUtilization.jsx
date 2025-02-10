@@ -49,6 +49,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
   const [isNodeDropdownOpen, setIsNodeDropdownOpen] = useState(false);
   const [selectedNodes, setSelectedNodes] = useState({});
   const [showTotalUtilization, setShowTotalUtilization] = useState(true);
+  const [showTotalCapacity, setShowTotalCapacity] = useState(true);
 
   // Get unique nodes and assign colors
   const nodeColors = useMemo(() => {
@@ -92,9 +93,13 @@ const TimeSeriesUtilizationCard = ({ data }) => {
           allTimestamps.add(periodKey);
           
           if (!nodeData[nodeName][periodKey]) {
-            nodeData[nodeName][periodKey] = [];
+            nodeData[nodeName][periodKey] = {
+              used: [],
+              total: []
+            };
           }
-          nodeData[nodeName][periodKey].push(point.memory_used);
+          nodeData[nodeName][periodKey].used.push(point.memory_used);
+          nodeData[nodeName][periodKey].total.push(point.memory_total);
         }
       });
     });
@@ -107,16 +112,22 @@ const TimeSeriesUtilizationCard = ({ data }) => {
       const dataPoint = { timestamp };
 
       Object.entries(nodeData).forEach(([nodeName, periodData]) => {
-        const values = periodData[timestamp] || [];
-        if (values.length > 0) {
-          dataPoint[nodeName] = _.mean(values);
+        const values = periodData[timestamp] || { used: [], total: [] };
+        if (values.used.length > 0) {
+          dataPoint[nodeName] = _.mean(values.used);
+          dataPoint[`${nodeName}_total`] = _.mean(values.total);
         }
       });
 
-      // Calculate total utilization
-      const nodeValues = Object.values(dataPoint).filter(val => typeof val === 'number');
+      // Calculate total utilization and capacity
+      const nodeValues = Object.entries(dataPoint)
+        .filter(([key, val]) => !key.includes('_total') && key !== 'timestamp' && typeof val === 'number');
+      const nodeTotals = Object.entries(dataPoint)
+        .filter(([key, val]) => key.includes('_total') && typeof val === 'number');
+
       if (nodeValues.length > 0) {
-        dataPoint.total_utilization = _.sum(nodeValues);
+        dataPoint.total_utilization = _.sum(nodeValues.map(([, val]) => val));
+        dataPoint.total_capacity = _.sum(nodeTotals.map(([, val]) => val));
       }
 
       return dataPoint;
@@ -242,8 +253,8 @@ const TimeSeriesUtilizationCard = ({ data }) => {
           </div>
         </div>
 
-        {/* Total Utilization Checkbox */}
-        <div className="mb-4 flex items-center justify-end">
+        {/* Total Utilization and Capacity Checkboxes */}
+        <div className="mb-4 flex items-center justify-end space-x-4">
           <label className="flex items-center space-x-2">
             <input
               type="checkbox"
@@ -252,6 +263,15 @@ const TimeSeriesUtilizationCard = ({ data }) => {
               className="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
             />
             <span className="text-sm text-slate-600">Total Utilization</span>
+          </label>
+          <label className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={showTotalCapacity}
+              onChange={() => setShowTotalCapacity(!showTotalCapacity)}
+              className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
+            />
+            <span className="text-sm text-slate-600">Total Capacity</span>
           </label>
         </div>
 
@@ -299,6 +319,9 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                   if (name === 'total_utilization') {
                     return [`${value?.toFixed(2)} GB`, 'Total Utilization'];
                   }
+                  if (name === 'total_capacity') {
+                    return [`${value?.toFixed(2)} GB`, 'Total Capacity'];
+                  }
                   if (name.startsWith('node_')) {
                     return [`${value?.toFixed(2)} GB`, `Node: ${name.replace('node_', '')}`];
                   }
@@ -334,6 +357,20 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                   strokeDasharray="5 5"
                   dot={false}
                   activeDot={{ r: 6, stroke: '#9333ea', strokeWidth: 2, fill: 'white' }}
+                />
+              )}
+
+              {/* Total capacity line */}
+              {showTotalCapacity && (
+                <Line
+                  type="monotone"
+                  dataKey="total_capacity"
+                  stroke="#dc2626"
+                  name="total_capacity"
+                  strokeWidth={2}
+                  strokeDasharray="5 5"
+                  dot={false}
+                  activeDot={{ r: 6, stroke: '#dc2626', strokeWidth: 2, fill: 'white' }}
                 />
               )}
               
