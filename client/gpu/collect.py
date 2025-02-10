@@ -28,8 +28,10 @@ def collect_gpu_stats_and_send():
                 "timestamp": timestamp,
                 "hostname": hostname,
                 "gpu_id": gpu.index,
+                "gpu_name": gpu.name,
                 "username": process["username"],
                 "memory_used": process["gpu_memory_usage"],
+                "memory_total": gpu.memory_total,
                 "command": process["command"],
             }
             usage_data.append(entry)
@@ -37,7 +39,7 @@ def collect_gpu_stats_and_send():
     # Send to master
     try:
         requests.post(f"http://{SERVER_ADDRESS}:5000/submit", json=usage_data)
-    except:
+    except Exception as e:
         # Fallback to local storage if network fails
         with open("gpu_usage_local.log", "a") as f:
             for entry in usage_data:
