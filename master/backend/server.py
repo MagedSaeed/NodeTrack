@@ -54,17 +54,26 @@ def get_time_series_data(df, period='hour'):
         'month': '1M'
     }
     
-    # Calculate total GPU memory per node per timestamp
-    gpu_totals = df.groupby(['timestamp', 'hostname', 'gpu_id'])['memory_used'].sum().reset_index()
+    # Calculate memory usage and total capacity per node per timestamp
+    gpu_data = df.groupby(['timestamp', 'hostname', 'gpu_id']).agg({
+        'memory_used': 'sum',
+        'memory_total': 'first'  # Take first since it should be constant per GPU
+    }).reset_index()
     
     # Resample to specified period
-    gpu_totals['period'] = gpu_totals['timestamp'].dt.floor(period_map[period])
+    gpu_data['period'] = gpu_data['timestamp'].dt.floor(period_map[period])
     
     # Calculate period average per GPU
-    period_gpu = gpu_totals.groupby(['period', 'hostname', 'gpu_id'])['memory_used'].mean().reset_index()
+    period_gpu = gpu_data.groupby(['period', 'hostname', 'gpu_id']).agg({
+        'memory_used': 'mean',
+        'memory_total': 'first'  # Take first since it should be constant per GPU
+    }).reset_index()
     
     # Sum across all GPUs for each node per period
-    node_totals = period_gpu.groupby(['period', 'hostname'])['memory_used'].sum().reset_index()
+    node_totals = period_gpu.groupby(['period', 'hostname']).agg({
+        'memory_used': 'sum',
+        'memory_total': 'sum'  # Sum total memory across GPUs per node
+    }).reset_index()
     
     # Create the time series for each node
     nodes_timeseries = []
@@ -73,7 +82,8 @@ def get_time_series_data(df, period='hour'):
         timeseries = [
             {
                 'timestamp': row['period'].isoformat(),
-                'memory_used': float(row['memory_used'] / 1024)  # Convert to GB
+                'memory_used': float(row['memory_used'] / 1024),  # Convert to GB
+                'memory_total': float(row['memory_total'] / 1024)  # Convert to GB
             }
             for _, row in node_data.iterrows()
         ]
@@ -83,11 +93,7 @@ def get_time_series_data(df, period='hour'):
     
     # Calculate summary statistics
     summary = {
-        f'{period}ly_stats': {
-            'min_memory_gb': float(node_totals['memory_used'].min() / 1024),
-            'max_memory_gb': float(node_totals['memory_used'].max() / 1024),
-            'avg_memory_gb': float(node_totals['memory_used'].mean() / 1024),
-        },
+        'total_capacity_gb': float(node_totals.groupby('period')['memory_total'].mean().mean() / 1024),
         'total_gpus': int(df['gpu_id'].nunique()),
         'total_nodes': int(df['hostname'].nunique()),
         'time_range': {
@@ -149,6 +155,7 @@ def generate_report():
         # Generate per-node statistics
         per_node = df.groupby(['hostname', 'timestamp']).agg({
             'memory_used': 'sum',
+            'memory_total': 'sum',  # Add total memory capacity
             'username': 'nunique',
             'gpu_id': 'nunique'
         }).reset_index()
@@ -156,20 +163,21 @@ def generate_report():
         # Calculate final per-node statistics
         per_node_stats = per_node.groupby('hostname').agg({
             'memory_used': ['mean', 'max', 'min'],
+            'memory_total': 'mean',  # Add average total memory capacity
             'username': 'max',
             'gpu_id': 'max'
         })
-        per_node_stats.columns = ['avg_memory', 'max_memory', 'min_memory', 'max_users', 'total_gpus']
+        per_node_stats.columns = ['avg_memory', 'max_memory', 'min_memory', 'total_capacity', 'max_users', 'total_gpus']
         
         reports = {
             'date_range': {
                 'start': start_time.strftime('%Y-%m-%d %H:%M:%S'),
                 'end': end_time.strftime('%Y-%m-%d %H:%M:%S')
             },
-            'time_series': time_series_data,  # Using new time series structure
+            'time_series': time_series_data,
             'per_user': per_user.to_dict(orient='index'),
             'per_node': per_node_stats.to_dict(orient='index'),
-            'summary': time_series_data['summary']  # Using summary from new time series function
+            'summary': time_series_data['summary']
         }
         
         # Clean NaN values before sending response
