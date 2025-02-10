@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card } from '../../../shared_ui/Card';
 import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, 
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, Brush 
 } from 'recharts';
 import { Database, ChevronDown } from 'lucide-react';
@@ -43,17 +43,12 @@ const getPeriodKey = (date, period) => {
   }
 };
 
-
 const TimeSeriesUtilizationCard = ({ data }) => {
   const [selectedPeriod, setSelectedPeriod] = useState(TIME_PERIODS.HOUR);
   const [filteredData, setFilteredData] = useState([]);
   const [isNodeDropdownOpen, setIsNodeDropdownOpen] = useState(false);
   const [selectedNodes, setSelectedNodes] = useState({});
-  const [selectedStats, setSelectedStats] = useState({
-    max_memory: true,
-    avg_memory: true,
-    min_memory: true
-  });
+  const [showTotalUtilization, setShowTotalUtilization] = useState(true);
 
   // Get unique nodes and assign colors
   const nodeColors = useMemo(() => {
@@ -62,7 +57,6 @@ const TimeSeriesUtilizationCard = ({ data }) => {
     const nodes = data.time_series.nodes_timeseries.map(node => Object.keys(node)[0]);
     const colors = generateDistinctColors(nodes.length);
     
-    // Initialize selectedNodes state
     setSelectedNodes(prev => {
       const newState = { ...prev };
       nodes.forEach(node => {
@@ -83,7 +77,6 @@ const TimeSeriesUtilizationCard = ({ data }) => {
     const now = new Date();
     const startDate = new Date(now.getTime() - (selectedPeriod.days * 24 * 60 * 60 * 1000));
 
-    // First, collect all timestamps and initialize the map
     const allTimestamps = new Set();
     const nodeData = {};
     
@@ -120,34 +113,22 @@ const TimeSeriesUtilizationCard = ({ data }) => {
         }
       });
 
-      const allValues = Object.values(nodeData)
-        .map(periodData => periodData[timestamp] || [])
-        .flat()
-        .filter(val => val !== undefined);
-
-      if (allValues.length > 0) {
-        dataPoint.max_memory = Math.max(...allValues);
-        dataPoint.min_memory = Math.min(...allValues);
-        dataPoint.avg_memory = _.mean(allValues);
+      // Calculate total utilization
+      const nodeValues = Object.values(dataPoint).filter(val => typeof val === 'number');
+      if (nodeValues.length > 0) {
+        dataPoint.total_utilization = _.sum(nodeValues);
       }
 
       return dataPoint;
     });
 
     // Reduce the number of visible points based on the data size
-    const maxPoints = 100; // Maximum number of points to show
+    const maxPoints = 100;
     const skip = Math.ceil(aggregatedData.length / maxPoints);
     const reducedData = aggregatedData.filter((_, index) => index % skip === 0);
 
     setFilteredData(reducedData);
   }, [selectedPeriod, data?.time_series?.nodes_timeseries]);
-
-  const stats = useMemo(() => ({
-    avg_memory: data.time_series?.summary?.hourly_stats?.avg_memory_gb || 0,
-    max_memory: data.time_series?.summary?.hourly_stats?.max_memory_gb || 0,
-    min_memory: data.time_series?.summary?.hourly_stats?.min_memory_gb || 0,
-    total_nodes: data.time_series?.summary?.total_nodes || 0
-  }), [data.time_series?.summary]);
 
   const formatTimeLabel = (timestamp) => {
     if (!timestamp) return '';
@@ -260,75 +241,18 @@ const TimeSeriesUtilizationCard = ({ data }) => {
             </div>
           </div>
         </div>
-        
-        {/* Statistics cards */}
-        <div className="grid grid-cols-4 gap-6 mb-8">
-          <div className="p-4 bg-slate-50 rounded-lg">
-            <div className="text-sm text-slate-600 mb-2">Average Nodes Usage</div>
-            <div className="text-2xl font-bold text-slate-800">
-              {stats.avg_memory.toFixed(2)} GB
-            </div>
-          </div>
-          <div className="p-4 bg-slate-50 rounded-lg">
-            <div className="text-sm text-slate-600 mb-2">Max Nodes Usage</div>
-            <div className="text-2xl font-bold text-slate-800">
-              {stats.max_memory.toFixed(2)} GB
-            </div>
-          </div>
-          <div className="p-4 bg-slate-50 rounded-lg">
-            <div className="text-sm text-slate-600 mb-2">Min Nodes Usage</div>
-            <div className="text-2xl font-bold text-slate-800">
-              {stats.min_memory.toFixed(2)} GB
-            </div>
-          </div>
-          <div className="p-4 bg-slate-50 rounded-lg">
-            <div className="text-sm text-slate-600 mb-2">Total Nodes</div>
-            <div className="text-2xl font-bold text-slate-800">
-              {stats.total_nodes}
-            </div>
-          </div>
-        </div>
 
-        {/* Chart with Legend Controls */}
-        <div className="mb-4 flex items-center justify-end space-x-6">
-          <div className="flex items-center space-x-4">
-            <label className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                checked={selectedStats.max_memory}
-                onChange={() => setSelectedStats(prev => ({
-                  ...prev,
-                  max_memory: !prev.max_memory
-                }))}
-                className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
-              />
-              <span className="text-sm text-slate-600">Maximum Memory</span>
-            </label>
-            <label className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                checked={selectedStats.avg_memory}
-                onChange={() => setSelectedStats(prev => ({
-                  ...prev,
-                  avg_memory: !prev.avg_memory
-                }))}
-                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-              />
-              <span className="text-sm text-slate-600">Average Memory</span>
-            </label>
-            <label className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                checked={selectedStats.min_memory}
-                onChange={() => setSelectedStats(prev => ({
-                  ...prev,
-                  min_memory: !prev.min_memory
-                }))}
-                className="h-4 w-4 rounded border-slate-300 text-green-600 focus:ring-green-500"
-              />
-              <span className="text-sm text-slate-600">Minimum Memory</span>
-            </label>
-          </div>
+        {/* Total Utilization Checkbox */}
+        <div className="mb-4 flex items-center justify-end">
+          <label className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={showTotalUtilization}
+              onChange={() => setShowTotalUtilization(!showTotalUtilization)}
+              className="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+            />
+            <span className="text-sm text-slate-600">Total Utilization</span>
+          </label>
         </div>
 
         {/* Chart */}
@@ -372,6 +296,9 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                   padding: '8px'
                 }}
                 formatter={(value, name) => {
+                  if (name === 'total_utilization') {
+                    return [`${value?.toFixed(2)} GB`, 'Total Utilization'];
+                  }
                   if (name.startsWith('node_')) {
                     return [`${value?.toFixed(2)} GB`, `Node: ${name.replace('node_', '')}`];
                   }
@@ -379,43 +306,6 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                 }}
                 labelFormatter={(label) => formatTimeLabel(label)}
               />
-              
-              {/* Statistics lines */}
-              {selectedStats.max_memory && (
-                <Line 
-                  type="monotone"
-                  dataKey="max_memory"
-                  stroke="#ef4444"
-                  name="Maximum Memory"
-                  strokeWidth={1.5}
-                  strokeDasharray="5 5"
-                  dot={false}
-                  activeDot={{ r: 6, stroke: '#ef4444', strokeWidth: 2, fill: 'white' }}
-                />
-              )}
-              {selectedStats.avg_memory && (
-                <Line 
-                  type="monotone"
-                  dataKey="avg_memory"
-                  stroke="#3b82f6"
-                  name="Average Memory"
-                  strokeWidth={2.5}
-                  dot={false}
-                  activeDot={{ r: 6, stroke: '#3b82f6', strokeWidth: 2, fill: 'white' }}
-                />
-              )}
-              {selectedStats.min_memory && (
-                <Line 
-                  type="monotone"
-                  dataKey="min_memory"
-                  stroke="#22c55e"
-                  name="Minimum Memory"
-                  strokeWidth={1.5}
-                  strokeDasharray="5 5"
-                  dot={false}
-                  activeDot={{ r: 6, stroke: '#22c55e', strokeWidth: 2, fill: 'white' }}
-                />
-              )}
 
               {/* Individual node lines */}
               {Object.entries(nodeColors).map(([nodeKey, color]) => (
@@ -429,10 +319,23 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                     strokeWidth={1}
                     dot={false}
                     activeDot={{ r: 4, stroke: color, strokeWidth: 1, fill: 'white' }}
-                    hide={false}
                   />
                 )
               ))}
+
+              {/* Total utilization line */}
+              {showTotalUtilization && (
+                <Line
+                  type="monotone"
+                  dataKey="total_utilization"
+                  stroke="#9333ea"
+                  name="total_utilization"
+                  strokeWidth={2}
+                  strokeDasharray="5 5"
+                  dot={false}
+                  activeDot={{ r: 6, stroke: '#9333ea', strokeWidth: 2, fill: 'white' }}
+                />
+              )}
               
               <Brush 
                 dataKey="timestamp"

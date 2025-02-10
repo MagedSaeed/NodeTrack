@@ -91,9 +91,6 @@ const GPU = () => {
         {/* Time Series Utilization Card */}
         <TimeSeriesUtilizationCard data={data} />
 
-        {/* Node Utilization Analysis - Fixed Chart */}
-        <NodeUtilization data={data} />
-
         {/* Activity Log - Fixed Table */}
         <ActivityLog data={data} />
 
