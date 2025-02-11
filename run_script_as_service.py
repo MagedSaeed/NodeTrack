@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import signal
+import psutil
 import logging
 import argparse
 import subprocess
@@ -70,9 +71,8 @@ class ServiceManager:
             return False
 
         try:
-            os.kill(pid, 0)  # Send null signal to check process
-            return True
-        except (ProcessLookupError, PermissionError):
+            return psutil.pid_exists(pid)
+        except Exception:
             return False
 
     def start(self):
@@ -142,11 +142,8 @@ class ServiceManager:
                 # Give it a moment to terminate gracefully
                 time.sleep(1)
                 # If it's still running, force kill
-                try:
-                    os.kill(pid, 0)
+                if psutil.pid_exists(pid):
                     os.kill(pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass  # Process already terminated
 
             self.logger.info(f"Stopped service {self.service_name} (PID: {pid})")
         except ProcessLookupError:
@@ -190,6 +187,4 @@ def main():
         else:
             print(f"Service {service.service_name} is not running")
 
-
-if __name__ == "__main__":
-    main()
+main()
