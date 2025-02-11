@@ -111,24 +111,29 @@ const TimeSeriesUtilizationCard = ({ data }) => {
     const aggregatedData = sortedTimestamps.map(timestamp => {
       const dataPoint = { timestamp };
 
+      // Track selected nodes' totals for this timestamp
+      let selectedUtilization = 0;
+      let selectedCapacity = 0;
+
       Object.entries(nodeData).forEach(([nodeName, periodData]) => {
         const values = periodData[timestamp] || { used: [], total: [] };
         if (values.used.length > 0) {
-          dataPoint[nodeName] = _.mean(values.used);
-          dataPoint[`${nodeName}_total`] = _.mean(values.total);
+          const usedValue = _.mean(values.used);
+          const totalValue = _.mean(values.total);
+          dataPoint[nodeName] = usedValue;
+          dataPoint[`${nodeName}_total`] = totalValue;
+
+          // Only add to totals if node is selected
+          if (selectedNodes[nodeName]) {
+            selectedUtilization += usedValue;
+            selectedCapacity += totalValue;
+          }
         }
       });
 
-      // Calculate total utilization and capacity
-      const nodeValues = Object.entries(dataPoint)
-        .filter(([key, val]) => !key.includes('_total') && key !== 'timestamp' && typeof val === 'number');
-      const nodeTotals = Object.entries(dataPoint)
-        .filter(([key, val]) => key.includes('_total') && typeof val === 'number');
-
-      if (nodeValues.length > 0) {
-        dataPoint.total_utilization = _.sum(nodeValues.map(([, val]) => val));
-        dataPoint.total_capacity = _.sum(nodeTotals.map(([, val]) => val));
-      }
+      // Add totals for selected nodes only
+      dataPoint.total_utilization = selectedUtilization;
+      dataPoint.total_capacity = selectedCapacity;
 
       return dataPoint;
     });
@@ -139,7 +144,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
     const reducedData = aggregatedData.filter((_, index) => index % skip === 0);
 
     setFilteredData(reducedData);
-  }, [selectedPeriod, data?.time_series?.nodes_timeseries]);
+  }, [selectedPeriod, data?.time_series?.nodes_timeseries, selectedNodes]); // Added selectedNodes as dependency
 
   const formatTimeLabel = (timestamp) => {
     if (!timestamp) return '';
@@ -262,7 +267,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
               onChange={() => setShowTotalUtilization(!showTotalUtilization)}
               className="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
             />
-            <span className="text-sm text-slate-600">Total Utilization</span>
+            <span className="text-sm text-slate-600">Selected Nodes Total Utilization</span>
           </label>
           <label className="flex items-center space-x-2">
             <input
@@ -271,7 +276,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
               onChange={() => setShowTotalCapacity(!showTotalCapacity)}
               className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
             />
-            <span className="text-sm text-slate-600">Total Capacity</span>
+            <span className="text-sm text-slate-600">Selected Nodes Total Capacity</span>
           </label>
         </div>
 
@@ -317,13 +322,13 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                 }}
                 formatter={(value, name) => {
                   if (name === 'total_utilization') {
-                    return [`${value?.toFixed(2)} GB`, 'Total Utilization'];
+                    return [`${value?.toFixed(2)} GB`, 'Selected Nodes Total Utilization'];
                   }
                   if (name === 'total_capacity') {
-                    return [`${value?.toFixed(2)} GB`, 'Total Capacity'];
+                    return [`${value?.toFixed(2)} GB`, 'Selected Nodes Total Capacity'];
                   }
-                  if (name.startsWith('node_')) {
-                    return [`${value?.toFixed(2)} GB`, `Node: ${name.replace('node_', '')}`];
+                  if (name.includes('_total')) {
+                    return [`${value?.toFixed(2)} GB`, `${name.replace('_total', '')} Capacity`];
                   }
                   return [`${value?.toFixed(2)} GB`, name];
                 }}
@@ -346,7 +351,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                 )
               ))}
 
-              {/* Total utilization line */}
+              {/* Total utilization line - now only for selected nodes */}
               {showTotalUtilization && (
                 <Line
                   type="monotone"
@@ -360,7 +365,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                 />
               )}
 
-              {/* Total capacity line */}
+              {/* Total capacity line - now only for selected nodes */}
               {showTotalCapacity && (
                 <Line
                   type="monotone"
