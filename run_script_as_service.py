@@ -91,7 +91,12 @@ class ServiceManager:
                 startupinfo = subprocess.STARTUPINFO()
                 startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
                 startupinfo.wShowWindow = subprocess.SW_HIDE
-                creationflags = subprocess.CREATE_NEW_PROCESS_GROUP
+                
+                creationflags = (
+                    subprocess.CREATE_NEW_PROCESS_GROUP | 
+                    subprocess.DETACHED_PROCESS | 
+                    subprocess.CREATE_NO_WINDOW
+                )
             else:  # Unix-like
                 startupinfo = None
                 creationflags = 0
@@ -108,10 +113,8 @@ class ServiceManager:
                     startupinfo=startupinfo,
                     creationflags=creationflags,
                     close_fds=True,  # Close parent file descriptors
-                    cwd=str(
-                        self.script_path.parent
-                    ),  # Set working directory to script location
-                    env=os.environ.copy(),  # Copy current environment
+                    cwd=str(self.script_path.parent),
+                    env=os.environ.copy(),
                 )
 
                 # Store the PID
