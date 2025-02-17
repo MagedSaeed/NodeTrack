@@ -181,7 +181,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
           </div>
           
           <div className="flex items-center space-x-4">
-            {/* Node Selection Dropdown */}
+            {/* Modified Node Selection Dropdown */}
             <div className="relative">
               <button
                 onClick={() => setIsNodeDropdownOpen(!isNodeDropdownOpen)}
@@ -193,26 +193,26 @@ const TimeSeriesUtilizationCard = ({ data }) => {
               
               {isNodeDropdownOpen && (
                 <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-lg shadow-lg z-50">
-                  <div className="p-2">
-                    <div className="mb-2 pb-2 border-b border-slate-200">
-                      <button
-                        onClick={() => {
-                          const allSelected = Object.values(selectedNodes).every(v => v);
-                          const newState = Object.keys(selectedNodes).reduce((acc, node) => {
-                            acc[node] = !allSelected;
-                            return acc;
-                          }, {});
-                          setSelectedNodes(newState);
-                        }}
-                        className="text-sm text-slate-600 hover:text-slate-900"
-                      >
-                        {Object.values(selectedNodes).every(v => v) ? 'Deselect All' : 'Select All'}
-                      </button>
-                    </div>
+                  <div className="p-2 border-b border-slate-200">
+                    <button
+                      onClick={() => {
+                        const allSelected = Object.values(selectedNodes).every(v => v);
+                        const newState = Object.keys(selectedNodes).reduce((acc, node) => {
+                          acc[node] = !allSelected;
+                          return acc;
+                        }, {});
+                        setSelectedNodes(newState);
+                      }}
+                      className="text-sm text-slate-600 hover:text-slate-900"
+                    >
+                      {Object.values(selectedNodes).every(v => v) ? 'Deselect All' : 'Select All'}
+                    </button>
+                  </div>
+                  <div className="overflow-y-auto max-h-64 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-slate-50">
                     {Object.keys(nodeColors).map(node => (
                       <div
                         key={node}
-                        className="flex items-center space-x-2 p-2 hover:bg-slate-50 rounded-md"
+                        className="flex items-center space-x-2 p-2 hover:bg-slate-50"
                       >
                         <input
                           type="checkbox"
@@ -229,7 +229,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                           className="w-3 h-3 rounded-full"
                           style={{ backgroundColor: nodeColors[node] }}
                         />
-                        <span className="text-sm text-slate-600">
+                        <span className="text-sm text-slate-600 truncate">
                           {node.replace('node_', 'Node ')}
                         </span>
                       </div>
@@ -238,7 +238,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                 </div>
               )}
             </div>
-
+  
             {/* Time Period Selection */}
             <div className="flex flex-wrap gap-2">
               {Object.values(TIME_PERIODS).map((period) => (
