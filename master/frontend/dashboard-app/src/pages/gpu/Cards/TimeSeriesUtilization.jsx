@@ -50,6 +50,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
   const [selectedNodes, setSelectedNodes] = useState({});
   const [showTotalUtilization, setShowTotalUtilization] = useState(true);
   const [showTotalCapacity, setShowTotalCapacity] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Get unique nodes and assign colors
   const nodeColors = useMemo(() => {
@@ -208,32 +209,50 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                       {Object.values(selectedNodes).every(v => v) ? 'Deselect All' : 'Select All'}
                     </button>
                   </div>
+                  
+                  {/* Search Input */}
+                  <div className="p-2 border-b border-slate-200">
+                    <input
+                      type="text"
+                      placeholder="Search nodes..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+  
                   <div className="overflow-y-auto max-h-64 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-slate-50">
-                    {Object.keys(nodeColors).map(node => (
-                      <div
-                        key={node}
-                        className="flex items-center space-x-2 p-2 hover:bg-slate-50"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedNodes[node]}
-                          onChange={() => {
-                            setSelectedNodes(prev => ({
-                              ...prev,
-                              [node]: !prev[node]
-                            }));
-                          }}
-                          className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                        />
+                    {Object.keys(nodeColors)
+                      .filter(node => {
+                        const normalizedSearch = searchQuery.toLowerCase();
+                        const normalizedNode = node.toLowerCase();
+                        return _.deburr(normalizedNode).includes(_.deburr(normalizedSearch));
+                      })
+                      .map(node => (
                         <div
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: nodeColors[node] }}
-                        />
-                        <span className="text-sm text-slate-600 truncate">
-                          {node.replace('node_', 'Node ')}
-                        </span>
-                      </div>
-                    ))}
+                          key={node}
+                          className="flex items-center space-x-2 p-2 hover:bg-slate-50"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedNodes[node]}
+                            onChange={() => {
+                              setSelectedNodes(prev => ({
+                                ...prev,
+                                [node]: !prev[node]
+                              }));
+                            }}
+                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: nodeColors[node] }}
+                          />
+                          <span className="text-sm text-slate-600 truncate">
+                            {node.replace('node_', 'Node ')}
+                          </span>
+                        </div>
+                      ))}
                   </div>
                 </div>
               )}
