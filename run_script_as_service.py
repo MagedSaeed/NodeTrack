@@ -177,12 +177,37 @@ class ServiceManager:
         """Set a description for the service."""
         self.metadata['description'] = description
         self.save_metadata()
+    
+    def cleanup_service_files(self):
+        """Clean up all files related to the service."""
+        files_to_remove = [
+            self.pid_file,                                          # PID file
+            self.metadata_file,                                     # Metadata file
+            self.log_dir / f"{self.service_name}.log",             # Log file
+            self.log_dir / f"{self.service_name}.out",             # stdout file
+            self.log_dir / f"{self.service_name}.err",             # stderr file
+        ]
+        
+        for file_path in files_to_remove:
+            try:
+                if file_path.exists():
+                    file_path.unlink()
+                    self.logger.info(f"Removed file: {file_path}")
+            except Exception as e:
+                self.logger.error(f"Error removing file {file_path}: {e}")
 
-    def stop(self):
-        """Stop the service."""
+    def stop(self, cleanup: bool = False):
+        """
+        Stop the service and optionally clean up all related files.
+        
+        Args:
+            cleanup: If True, removes all service-related files after stopping
+        """
         pid = self.read_pid()
         if not pid:
             self.logger.warning(f"No PID file found for service {self.service_name}")
+            if cleanup:
+                self.cleanup_service_files()
             return
 
         try:
@@ -197,6 +222,16 @@ class ServiceManager:
                     os.kill(pid, signal.SIGKILL)
 
             self.logger.info(f"Stopped service {self.service_name} (PID: {pid})")
+            
+            # Update metadata before potential cleanup
+            if not cleanup:
+                stop_time = datetime.now()
+                if self.metadata.get('last_start_time'):
+                    start_time = datetime.fromisoformat(self.metadata['last_start_time'])
+                    runtime = (stop_time - start_time).total_seconds()
+                    self.metadata['total_runtime'] += runtime
+                    self.save_metadata()
+            
         except ProcessLookupError:
             self.logger.warning(f"Process {pid} not found")
         except Exception as e:
@@ -204,6 +239,10 @@ class ServiceManager:
         finally:
             if self.pid_file.exists():
                 self.pid_file.unlink()
+            
+            # Perform cleanup if requested
+            if cleanup:
+                self.cleanup_service_files()
 
     @classmethod
     def list_services(cls, log_dir: str = None) -> list[dict]:
@@ -257,6 +296,11 @@ def main():
     )
     parser.add_argument("--log-dir", help="Directory for log files")
     parser.add_argument("--description", help="Service description (used with describe action)")
+    parser.add_argument(
+        "--cleanup",
+        action="store_true",
+        help="Remove all service files when stopping (used with stop action)"
+    )
 
     args = parser.parse_args()
 
@@ -292,7 +336,7 @@ def main():
         if args.action == "start":
             service.start()
         elif args.action == "stop":
-            service.stop()
+            service.stop(cleanup=args.cleanup)
         elif args.action == "status":
             if service.is_running():
                 pid = service.read_pid()
