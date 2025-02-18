@@ -155,7 +155,7 @@ def generate_report():
         # Generate per-node statistics
         per_node = df.groupby(['hostname', 'timestamp']).agg({
             'memory_used': 'sum',
-            'memory_total': 'sum',  # Add total memory capacity
+            'memory_total': 'sum',
             'username': 'nunique',
             'gpu_id': 'nunique'
         }).reset_index()
@@ -163,7 +163,7 @@ def generate_report():
         # Calculate final per-node statistics
         per_node_stats = per_node.groupby('hostname').agg({
             'memory_used': ['mean', 'max', 'min'],
-            'memory_total': 'mean',  # Add average total memory capacity
+            'memory_total': 'max',
             'username': 'max',
             'gpu_id': 'max'
         })
