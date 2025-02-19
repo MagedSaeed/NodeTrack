@@ -12,7 +12,9 @@ from datetime import datetime
 from string import Template
 from typing import Optional
 from tabulate import tabulate
-import stat    # for Unix
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Platform-specific imports
 if os.name == "nt":  # Windows only
@@ -115,6 +117,24 @@ class ServiceManager:
         except Exception:
             return False
 
+    def _get_python_path(self):
+        # Get the Python executable path
+        python_path = os.getenv('PYTHON_EXECUTABLE')
+        if not python_path:
+            raise ValueError(
+                "PYTHON_EXECUTABLE not set in .env file. "
+                "Please add PYTHON_EXECUTABLE=/path/to/your/venv/python"
+            )
+        
+        python_path = Path(python_path)
+        if not python_path.exists():
+            raise ValueError(
+                f"Python executable not found at {python_path}. "
+                "Please check your PYTHON_EXECUTABLE path in .env"
+            )
+            
+        return python_path
+    
     def _resolve_paths_for_template(self) -> dict:
         """
         Resolve all paths needed for the service template.
@@ -129,7 +149,7 @@ class ServiceManager:
         service_manager_path = Path(__file__).resolve()
         
         # Get the absolute path of the Python executable
-        python_exe = Path(sys.executable).resolve()
+        python_exe = self._get_python_path()
         
         # Ensure log paths are absolute
         stdout_path = (self.log_dir / f"{self.service_name}.out").resolve()
@@ -318,7 +338,7 @@ class ServiceManager:
             return service_file.exists()
 
     def _enable_autostart_windows(self) -> bool:
-        """Enable auto-start on Windows using Registry."""
+        """Enable auto-start on Windows using Registry with .env configuration."""
         if os.name != "nt":
             self.logger.error("This method is only supported on Windows")
             return False
@@ -333,7 +353,7 @@ class ServiceManager:
             # Open the Registry key for startup programs
             key_path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
             key = winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, key_path, 0, 
-                                   winreg.KEY_WRITE | winreg.KEY_READ)
+                                winreg.KEY_WRITE | winreg.KEY_READ)
 
             # Set the Registry value
             winreg.SetValueEx(key, f"ServiceManager_{self.service_name}", 0, 
