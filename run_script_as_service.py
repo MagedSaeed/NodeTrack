@@ -119,18 +119,18 @@ class ServiceManager:
 
     def _get_python_path(self):
         # Get the Python executable path
-        python_path = os.getenv('PYTHON_EXECUTABLE')
+        python_path = os.getenv('PYTHON_EXEC')
         if not python_path:
             raise ValueError(
-                "PYTHON_EXECUTABLE not set in .env file. "
-                "Please add PYTHON_EXECUTABLE=/path/to/your/venv/python"
+                "PYTHON_EXEC not set in .env file. "
+                "Please add PYTHON_EXEC=/path/to/your/venv/python"
             )
         
         python_path = Path(python_path)
         if not python_path.exists():
             raise ValueError(
                 f"Python executable not found at {python_path}. "
-                "Please check your PYTHON_EXECUTABLE path in .env"
+                "Please check your PYTHON_EXEC path in .env"
             )
             
         return python_path
