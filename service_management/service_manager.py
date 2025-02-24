@@ -9,17 +9,12 @@ import argparse
 import subprocess
 from pathlib import Path
 from datetime import datetime
-from string import Template
 from typing import Optional
 from tabulate import tabulate
 from dotenv import load_dotenv
 
 sys.stdout.reconfigure(encoding='utf-8')
 load_dotenv()
-
-# Platform-specific imports
-if os.name == "nt":  # Windows only
-    import winreg
 
 class ServiceManager:
     def __init__(self, service_name: str, script_path: str = None, log_dir: str = None):
@@ -279,200 +274,6 @@ class ServiceManager:
             if cleanup:
                 self.cleanup_service_files()
 
-    def enable_autostart(self) -> bool:
-        """
-        Enable auto-start on system startup.
-        Returns True if successful, False otherwise.
-        Note: Requires administrative privileges on Unix-like systems.
-        """
-        if not self.metadata.get('script_path'):
-            self.logger.error("Script path not set. Cannot enable auto-start.")
-            return False
-
-        try:
-            if os.name == "nt":  # Windows
-                return self._enable_autostart_windows()
-            else:  # Unix-like
-                return self._enable_autostart_unix()
-        except PermissionError:
-            self.logger.error("Administrative privileges required to enable auto-start")
-            return False
-        except Exception as e:
-            self.logger.error(f"Error enabling auto-start: {e}")
-            return False
-
-    def disable_autostart(self) -> bool:
-        """
-        Disable auto-start on system startup.
-        Returns True if successful, False otherwise.
-        """
-        try:
-            if os.name == "nt":  # Windows
-                return self._disable_autostart_windows()
-            else:  # Unix-like
-                return self._disable_autostart_unix()
-        except PermissionError:
-            self.logger.error("Administrative privileges required to disable auto-start")
-            return False
-        except Exception as e:
-            self.logger.error(f"Error disabling auto-start: {e}")
-            return False
-    
-    def is_autostart_enabled(self) -> bool:
-        """Check if auto-start is enabled for this service."""
-        if os.name == "nt":  # Windows
-            try:
-                key_path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
-                key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, 
-                                   winreg.KEY_READ)
-                try:
-                    winreg.QueryValueEx(key, f"ServiceManager_{self.service_name}")
-                    return True
-                except FileNotFoundError:
-                    return False
-                finally:
-                    winreg.CloseKey(key)
-            except Exception:
-                return False
-        else:  # Unix-like
-            service_file = Path.home() / f".config/systemd/user/servicemanager-{self.service_name}.service"
-            return service_file.exists()
-
-    def _enable_autostart_windows(self) -> bool:
-        """Enable auto-start on Windows using Registry with .env configuration."""
-        if os.name != "nt":
-            self.logger.error("This method is only supported on Windows")
-            return False
-
-        try:
-            # Get all resolved paths
-            paths = self._resolve_paths_for_template()
-            
-            # Prepare the command with resolved paths
-            command = f'"{paths["python_exe"]}" "{paths["script_path"]}" start "{self.service_name}" --script "{paths["target_script"]}"'
-
-            # Open the Registry key for startup programs
-            key_path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
-            key = winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, key_path, 0, 
-                                winreg.KEY_WRITE | winreg.KEY_READ)
-
-            # Set the Registry value
-            winreg.SetValueEx(key, f"ServiceManager_{self.service_name}", 0, 
-                            winreg.REG_SZ, command)
-            winreg.CloseKey(key)
-
-            self.logger.info(f"Enabled auto-start for service {self.service_name}")
-            return True
-
-        except Exception as e:
-            self.logger.error(f"Error setting up Windows auto-start: {e}")
-            return False
-
-    def _disable_autostart_windows(self) -> bool:
-        """Disable auto-start on Windows."""
-        if os.name != "nt":
-            self.logger.error("This method is only supported on Windows")
-            return False
-
-        try:
-            key_path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
-            key = winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, key_path, 0, 
-                                   winreg.KEY_WRITE | winreg.KEY_READ)
-            
-            try:
-                winreg.DeleteValue(key, f"ServiceManager_{self.service_name}")
-            except FileNotFoundError:
-                pass  # Key doesn't exist, that's fine
-                
-            winreg.CloseKey(key)
-            
-            self.logger.info(f"Disabled auto-start for service {self.service_name}")
-            return True
-
-        except Exception as e:
-            self.logger.error(f"Error removing Windows auto-start: {e}")
-            return False
-
-    def _enable_autostart_unix(self) -> bool:
-        """Enable auto-start on Unix-like systems using systemd user service."""
-        service_template = Template("""[Unit]
-Description=$description
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=$python_exe $script_path start "$service_name" --script "$target_script"
-Restart=always
-RestartSec=3
-StandardOutput=append:$stdout_path
-StandardError=append:$stderr_path
-
-[Install]
-WantedBy=default.target
-""")
-
-        try:
-            # Ensure user systemd directory exists
-            user_systemd_dir = Path.home() / ".config/systemd/user"
-            user_systemd_dir.mkdir(parents=True, exist_ok=True)
-
-            # Get all resolved paths
-            paths = self._resolve_paths_for_template()
-
-            # Prepare the service file content
-            service_content = service_template.substitute(
-                description=self.metadata.get('description', f"Service {self.service_name}"),
-                service_name=self.service_name,
-                **paths
-            )
-
-            # Write the service file to user's systemd directory
-            service_file = user_systemd_dir / f"servicemanager-{self.service_name}.service"
-            with open(service_file, 'w') as f:
-                f.write(service_content)
-
-            # Set correct permissions
-            service_file.chmod(0o644)
-
-            # Reload user systemd and enable the service
-            subprocess.run(['systemctl', '--user', 'daemon-reload'], check=True)
-            subprocess.run(['systemctl', '--user', 'enable', f'servicemanager-{self.service_name}'], 
-                         check=True)
-            
-            # Enable lingering if not already enabled (allows service to run even when user logs out)
-            subprocess.run(['loginctl', 'enable-linger', os.getenv('USER')], 
-                         check=True, stderr=subprocess.DEVNULL)
-
-            self.logger.info(f"Enabled user-level auto-start for service {self.service_name}")
-            return True
-
-        except Exception as e:
-            self.logger.error(f"Error setting up Unix user-level auto-start: {e}")
-            return False
-
-    def _disable_autostart_unix(self) -> bool:
-        """Disable auto-start on Unix-like systems for user-level service."""
-        try:
-            service_name = f"servicemanager-{self.service_name}"
-            
-            # Disable and stop the user service
-            subprocess.run(['systemctl', '--user', 'disable', service_name], check=True)
-            
-            # Remove the service file
-            service_file = Path.home() / f".config/systemd/user/{service_name}.service"
-            if service_file.exists():
-                service_file.unlink()
-                
-            # Reload user systemd
-            subprocess.run(['systemctl', '--user', 'daemon-reload'], check=True)
-            
-            self.logger.info(f"Disabled user-level auto-start for service {self.service_name}")
-            return True
-
-        except Exception as e:
-            self.logger.error(f"Error removing Unix user-level auto-start: {e}")
-            return False
-
     @classmethod
     def list_services(cls, log_dir: str = None) -> list[dict]:
         """List all available services in the log directory."""
@@ -495,13 +296,9 @@ WantedBy=default.target
                 start_time = datetime.fromisoformat(service.metadata['created_at'])
                 uptime = str(datetime.now() - start_time).split('.')[0]
             
-            # Check if auto-start is enabled
-            autostart = "🔵 Yes" if service.is_autostart_enabled() else "⚪ No"
-            
             services.append({
                 "Name": service_name,
                 "Status": "🟢 Running" if is_running else "🔴 Stopped",
-                "Auto-start": autostart,
                 "PID": pid or "-",
                 "Script": service.metadata.get('script_path') or "-",
                 "Description": service.metadata.get('description') or "-",
@@ -521,8 +318,6 @@ def main():
             "status",
             "list",
             "describe",
-            "enable-autostart",
-            "disable-autostart",
         ],
         help="Action to perform",
     )
@@ -568,25 +363,6 @@ def main():
         service.set_description(args.description)
         print(f"Updated description for service {args.service_name}")
     
-    elif args.action in ["enable-autostart", "disable-autostart"]:
-        if not args.service_name:
-            parser.error("service_name is required for autostart actions")
-        
-        service = ServiceManager(args.service_name, args.script, args.log_dir)
-        
-        if args.action == "enable-autostart":
-            if service.enable_autostart():
-                print(f"Enabled auto-start for service {args.service_name}")
-            else:
-                print("Failed to enable auto-start. Check logs for details.")
-                sys.exit(1)
-        else:  # disable-autostart
-            if service.disable_autostart():
-                print(f"Disabled auto-start for service {args.service_name}")
-            else:
-                print("Failed to disable auto-start. Check logs for details.")
-                sys.exit(1)
-    
     else:
         if not args.service_name:
             parser.error("service_name is required for start/stop/status actions")
@@ -603,7 +379,6 @@ def main():
                 print(f"Service {service.service_name} is running (PID: {pid})")
             else:
                 print(f"Service {service.service_name} is not running")
-
 
 if __name__ == "__main__":
     main()
