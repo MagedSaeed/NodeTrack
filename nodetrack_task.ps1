@@ -10,10 +10,22 @@ if (-Not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 # Get current username
 $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 
+# Get the directory of the current script
+$scriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+# Build the path to nodetrack_client.ps1
+$clientScriptPath = Join-Path $scriptDirectory "nodetrack_client.ps1"
+
+# Verify the client script exists
+if (-Not (Test-Path $clientScriptPath)) {
+    Write-Error "Could not find nodetrack_client.ps1 in the same directory as this script"
+    Exit 1
+}
+
 # Script to create NodeTrack scheduled task
 $action = New-ScheduledTaskAction `
     -Execute 'powershell.exe' `
-    -Argument '"C:\Users\ondemand_admin\Desktop\Projects\NodeTrack\nodetrack_script.ps1"'
+    -Argument "`"$clientScriptPath`""
 
 $trigger = New-ScheduledTaskTrigger -AtStartup
 
