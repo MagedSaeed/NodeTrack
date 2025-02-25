@@ -9,7 +9,7 @@ const Overview = ({ data }) => {
                         <div className="p-1.5 bg-blue-50 rounded-md">
                             <Users className="h-4 w-4 text-blue-500" />
                         </div>
-                        <h3 className="text-sm font-medium text-slate-600">Active Users</h3>
+                        <h3 className="text-sm font-medium text-slate-600">Total Users</h3>
                     </div>
                     <div className="text-2xl font-bold text-slate-800">
                         {Object.keys(data.per_user).length}
@@ -23,7 +23,7 @@ const Overview = ({ data }) => {
                         <div className="p-1.5 bg-emerald-50 rounded-md">
                             <Server className="h-4 w-4 text-emerald-500" />
                         </div>
-                        <h3 className="text-sm font-medium text-slate-600">Active Nodes</h3>
+                        <h3 className="text-sm font-medium text-slate-600">Total Nodes</h3>
                     </div>
                     <div className="text-2xl font-bold text-slate-800">
                         {Object.keys(data.per_node).length}
@@ -37,7 +37,7 @@ const Overview = ({ data }) => {
                         <div className="p-1.5 bg-violet-50 rounded-md">
                             <Cpu className="h-4 w-4 text-violet-500" />
                         </div>
-                        <h3 className="text-sm font-medium text-slate-600">GPUs in Use</h3>
+                        <h3 className="text-sm font-medium text-slate-600">Total GPUs</h3>
                     </div>
                     <div className="text-2xl font-bold text-slate-800">{data.summary.total_gpus}</div>
                 </div>

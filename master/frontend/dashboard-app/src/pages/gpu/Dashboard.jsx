@@ -91,7 +91,7 @@ const GPU = () => {
         <TimeSeriesUtilizationCard data={data} />
 
         {/* Activity Log - Fixed Table */}
-        <ActivityLog data={data} />
+        {/* <ActivityLog data={data} /> */}
 
       </div>
     </div>
