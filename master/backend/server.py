@@ -16,7 +16,7 @@ if not DATA_DIR:
 LOG_FILE = f'{DATA_DIR}/cluster_gpu_usage.log'
 
 # Add excluded users
-EXCLUDED_USERS = {'gdm', '?', 'NT AUTHORITY\SYSTEM'}
+# EXCLUDED_USERS = {'gdm', '?', 'NT AUTHORITY\SYSTEM'}
 
 def clean_nan_values(obj):
     """Clean NaN values from the data structure"""
@@ -127,7 +127,7 @@ def generate_report():
         
         # Read data
         df = pd.DataFrame([json.loads(line) for line in open(LOG_FILE)])
-        df = df[~df['username'].isin(EXCLUDED_USERS)]
+        # df = df[~df['username'].isin(EXCLUDED_USERS)]
         df['timestamp'] = pd.to_datetime(df['timestamp'])
         
         # Filter by date range if provided
