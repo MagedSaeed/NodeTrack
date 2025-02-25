@@ -91,10 +91,14 @@ def get_time_series_data(df, period='hour'):
             f'node_{hostname}': timeseries
         })
     
+    # Count total unique GPUs by considering hostname and gpu_id combinations
+    # This ensures we count each physical GPU rather than just unique gpu_id values
+    total_gpus = df.drop_duplicates(['hostname', 'gpu_id']).shape[0]
+    
     # Calculate summary statistics
     summary = {
         'total_capacity_gb': float(node_totals.groupby('period')['memory_total'].mean().mean() / 1024),
-        'total_gpus': int(df['gpu_id'].nunique()),
+        'total_gpus': int(total_gpus),
         'total_nodes': int(df['hostname'].nunique()),
         'time_range': {
             'start': node_totals['period'].min().isoformat(),
