@@ -62,6 +62,3 @@ def collect_gpu_stats_and_send():
         with open("gpu_usage_local.log", "a") as f:
             for entry in usage_data:
                 f.write(json.dumps(entry) + "\n")
-
-
-collect_gpu_stats_and_send()
