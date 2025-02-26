@@ -188,8 +188,22 @@ class ServiceManager:
             assert self.script_path, "Script path is required for this operation"
             with open(stdout_file, "a") as stdout, open(stderr_file, "a") as stderr:
                 # Start the script as a detached subprocess
+                # On Windows, use pythonw.exe instead of python.exe to avoid console window
+                if os.name == "nt":
+                    # Get pythonw.exe path (same directory as the current Python executable)
+                    python_exe_path = Path(sys.executable)
+                    pythonw_exe = python_exe_path.parent / "pythonw.exe"
+                    
+                    if pythonw_exe.exists():
+                        exe_path = str(pythonw_exe)
+                    else:
+                        # Fallback to regular python with hiding flags
+                        exe_path = sys.executable
+                else:
+                    exe_path = sys.executable
+                    
                 process = subprocess.Popen(
-                    [sys.executable, str(self.script_path)],
+                    [exe_path, str(self.script_path)],
                     stdout=stdout,
                     stderr=stderr,
                     stdin=subprocess.DEVNULL,
