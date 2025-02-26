@@ -25,9 +25,9 @@ temp_crontab=$(mktemp)
 crontab -l > "$temp_crontab" 2>/dev/null || echo "" > "$temp_crontab"
 
 # Check if the entry already exists to avoid duplicates
-if ! grep -q "@reboot $client_script" "$temp_crontab"; then
+if ! grep -q "@reboot sleep 15 && $client_script" "$temp_crontab"; then
   # Add the new entry to run at system startup
-  echo "@reboot $client_script" >> "$temp_crontab"
+  echo "@reboot sleep 15 && $client_script" >> "$temp_crontab"
   
   # Install the new crontab
   crontab "$temp_crontab"
