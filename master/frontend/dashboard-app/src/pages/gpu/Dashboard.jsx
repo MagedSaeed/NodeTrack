@@ -4,6 +4,7 @@ import TimeSeriesUtilizationCard from './Cards/TimeSeriesUtilization';
 import { useDateRange } from '../../contexts/DateContext';
 import Overview from './Cards/Overview';
 import ActivityLog from './Cards/ActivityLog';
+import { fetchWithTokenAuth } from '../../utils/auth'; // Import the auth utility
 
 const GPU = () => {
   const [data, setData] = useState(null);
@@ -13,30 +14,23 @@ const GPU = () => {
 
   const fetchData = async () => {
     try {
-      setLoading(true);
       const serverAddress = import.meta.env.VITE_SERVER_ADDRESS;
       
       // Construct URL with date parameters
       const url = new URL(`http://${serverAddress}:5000/report`);
       if (startDate) url.searchParams.append('start_date', startDate);
       if (endDate) url.searchParams.append('end_date', endDate);
-      
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const result = await response.json();
-      if (result.error) {
-        throw new Error(result.error);
-      }
-      
-      setData(result);
-      setError(null);
+
+      // Use the auth utility to handle token management and requests
+      await fetchWithTokenAuth({
+        url: url.toString(),
+        onSuccess: (result) => setData(result),
+        onError: (errorMsg) => setError(errorMsg),
+        setLoading: setLoading
+      });
     } catch (err) {
-      setError(err.message || 'Failed to fetch data');
-    } finally {
-      setLoading(false);
+      // Error is already handled by fetchWithTokenAuth
+      console.error("Error in fetchData:", err);
     }
   };
 

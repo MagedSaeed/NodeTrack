@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 from flask_cors import CORS
+from functools import wraps
 
 app = Flask(__name__, static_folder='../frontend/dashboard-app/dist')
 CORS(app)
@@ -15,8 +16,39 @@ if not DATA_DIR:
 
 LOG_FILE = f'{DATA_DIR}/cluster_gpu_usage.log'
 
+# Set a secure access token (ideally should be stored in environment variable)
+ACCESS_TOKEN = os.environ.get('API_ACCESS_TOKEN')
+if not ACCESS_TOKEN:
+    raise Exception("API_ACCESS_TOKEN is not set. It should be added as an environment variable first.")
+
 # Add excluded users
 # EXCLUDED_USERS = {'gdm', '?', 'NT AUTHORITY\SYSTEM'}
+
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+        
+        # Check if token is in headers
+        if 'Authorization' in request.headers:
+            auth_header = request.headers['Authorization']
+            if auth_header.startswith('Bearer '):
+                token = auth_header.split(' ')[1]
+        
+        # Check if token is in query parameters (for GET requests)
+        if not token and 'token' in request.args:
+            token = request.args.get('token')
+            
+        # Check if token is valid
+        if not token or token != ACCESS_TOKEN:
+            return jsonify({
+                'error': 'Unauthorized access',
+                'message': 'Valid access token is required'
+            }), 401
+            
+        return f(*args, **kwargs)
+    
+    return decorated
 
 def clean_nan_values(obj):
     """Clean NaN values from the data structure"""
@@ -121,6 +153,7 @@ def submit_data():
     return 'OK'
 
 @app.route('/report', methods=['GET'])
+@token_required
 def generate_report():
     """Generate comprehensive usage report"""
     try:
