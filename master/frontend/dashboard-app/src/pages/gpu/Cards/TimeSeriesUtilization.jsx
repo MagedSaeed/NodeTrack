@@ -6,6 +6,8 @@ import {
 } from 'recharts';
 import { Database, ChevronDown, X, Search } from 'lucide-react';
 import _ from 'lodash';
+import { Resizable } from 'react-resizable';
+import 'react-resizable/css/styles.css';
 
 const TIME_PERIODS = {
   HOUR: { label: 'Hourly', value: 'hour', days: 7 },
@@ -44,16 +46,23 @@ const getPeriodKey = (date, period) => {
 };
 
 // Custom tooltip component that can be toggled to show detailed nodes list
-// This is just a tooltip renderer - no interaction
 const CustomTooltip = ({ active, payload, label, nodeColors, selectedNodes, formatTimeLabel }) => {
   if (!active || !payload || !payload.length) return null;
   
   // Get all selected nodes with values
   const nodesWithValues = payload.filter(item => {
     const dataKey = item.dataKey;
-    return !dataKey.includes('_total') && dataKey !== 'total_utilization' && dataKey !== 'total_capacity' 
-      && selectedNodes[dataKey] && item.value !== undefined;
+    return !dataKey.includes('_total') && 
+           dataKey !== 'total_utilization' && 
+           dataKey !== 'total_capacity' && 
+           selectedNodes[dataKey] && 
+           item.value !== undefined;
   });
+  
+  // Sort nodes by utilization (highest to lowest) and take top 5
+  const topUtilizedNodes = [...nodesWithValues]
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 5);
   
   // Get total values if they exist
   const totalUtilization = payload.find(item => item.dataKey === 'total_utilization')?.value;
@@ -66,23 +75,24 @@ const CustomTooltip = ({ active, payload, label, nodeColors, selectedNodes, form
         <div className="text-xs text-slate-500">Click point to see details</div>
       </div>
       
-      {/* Show abbreviated info in tooltip */}
-      {nodesWithValues.length > 0 && (
+      {/* Show top 5 most utilized nodes in tooltip */}
+      {topUtilizedNodes.length > 0 && (
         <div className="text-xs text-slate-600">
-          {nodesWithValues.slice(0, 3).map((item, index) => (
+          <div className="text-xs font-medium text-slate-500 mb-1">Top Utilized Nodes:</div>
+          {topUtilizedNodes.map((item, index) => (
             <div key={index} className="flex items-center space-x-2 my-1">
               <div 
                 className="w-2 h-2 rounded-full" 
                 style={{ backgroundColor: nodeColors[item.dataKey] }}
               />
               <span className="truncate">{item.dataKey.replace('node_', 'Node ')}</span>
-              <span className="font-medium">{item.value.toFixed(2)} GB</span>
+              <span className="font-medium text-purple-600">{item.value.toFixed(2)} GB</span>
             </div>
           ))}
           
-          {nodesWithValues.length > 3 && (
-            <div className="text-slate-500 mt-1 text-center">
-              +{nodesWithValues.length - 3} more nodes
+          {nodesWithValues.length > 5 && (
+            <div className="text-slate-500 mt-1 text-center text-xs">
+              +{nodesWithValues.length - 5} more nodes
             </div>
           )}
         </div>
@@ -109,16 +119,74 @@ const CustomTooltip = ({ active, payload, label, nodeColors, selectedNodes, form
   );
 };
 
-// Details panel component
+// Fixed position Details panel component
 const DetailsPanel = ({ selectedPoint, nodeColors, onClose, setSelectedNodes }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectAll, setSelectAll] = useState(true);
+  const [dimensions, setDimensions] = useState({ width: 450, height: 550 });
+  const panelRef = useRef(null);
+  const [sortConfig, setSortConfig] = useState({ key: 'dataKey', direction: 'ascending' });
+  
+  // Initialize panel position to center of viewport on mount
+  useEffect(() => {
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    // Calculate position to center the panel
+    const left = (viewportWidth - dimensions.width) / 2;
+    const top = (viewportHeight - dimensions.height) / 2;
+    
+    // Apply position directly to the panel element
+    if (panelRef.current) {
+      panelRef.current.style.left = `${left}px`;
+      panelRef.current.style.top = `${top}px`;
+    }
+  }, [dimensions]);
   
   // Filter nodes based on search query
   const filteredNodes = selectedPoint.nodes.filter(item => {
     const nodeName = item.dataKey.toLowerCase();
     return nodeName.includes(searchQuery.toLowerCase());
   });
+  
+  // Sorting logic
+  const requestSort = (key) => {
+    let direction = 'ascending';
+    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+  
+  // Apply sorting to filtered nodes
+  const sortedNodes = useMemo(() => {
+    let sortableItems = [...filteredNodes];
+    if (sortConfig.key && sortConfig.direction) {
+      sortableItems.sort((a, b) => {
+        let aValue, bValue;
+        
+        if (sortConfig.key === 'dataKey') {
+          aValue = a.dataKey.toLowerCase();
+          bValue = b.dataKey.toLowerCase();
+        } else if (sortConfig.key === 'value') {
+          aValue = a.value;
+          bValue = b.value;
+        } else if (sortConfig.key === 'capacity') {
+          aValue = selectedPoint.capacities[a.dataKey] || 0;
+          bValue = selectedPoint.capacities[b.dataKey] || 0;
+        }
+        
+        if (aValue < bValue) {
+          return sortConfig.direction === 'ascending' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === 'ascending' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return sortableItems;
+  }, [filteredNodes, sortConfig, selectedPoint.capacities]);
   
   // Handle select/deselect all
   const handleSelectAll = () => {
@@ -145,79 +213,155 @@ const DetailsPanel = ({ selectedPoint, nodeColors, onClose, setSelectedNodes }) 
     }));
   };
   
+  // Handle resize
+  const onResize = (event, { size }) => {
+    setDimensions({
+      width: size.width,
+      height: size.height
+    });
+  };
+  
+  // Render sort indicator arrow
+  const getSortDirectionArrow = (key) => {
+    if (sortConfig.key !== key) {
+      return <span className="text-slate-300 ml-1">↕</span>;
+    }
+    return sortConfig.direction === 'ascending' ? 
+      <span className="text-blue-500 ml-1">↑</span> : 
+      <span className="text-blue-500 ml-1">↓</span>;
+  };
+  
   return (
-    <div className="absolute left-1/4 right-1/4 top-2 bottom-2 bg-white z-30 flex flex-col rounded-lg shadow-lg border border-slate-200">
-      <div className="py-2 px-4 border-b border-slate-200 flex justify-between items-center bg-blue-50">
-        <h3 className="font-medium text-slate-700">
-          Node Details for {selectedPoint.formattedLabel}
-        </h3>
-        <button 
-          onClick={onClose}
-          className="text-slate-400 hover:text-slate-600"
-        >
-          <X size={18} />
-        </button>
-      </div>
-      
-      <div className="p-4 border-b border-slate-200">
-        <div className="flex items-center space-x-2 bg-slate-50 rounded-lg px-3 py-2">
-          <Search size={16} className="text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search nodes..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-transparent border-none text-sm focus:outline-none"
-          />
-        </div>
-      </div>
-      
-      <div className="flex-1 overflow-y-auto p-2">
-        {filteredNodes.map((item, index) => {
-          const nodeName = item.dataKey;
-          return (
-            <div 
-              key={index}
-              className="flex items-center space-x-3 p-2 hover:bg-slate-50 rounded-md"
+    <Resizable
+      width={dimensions.width}
+      height={dimensions.height}
+      minConstraints={[350, 400]}
+      maxConstraints={[800, 700]}
+      onResize={onResize}
+      handle={<div className="react-resizable-handle react-resizable-handle-se cursor-se-resize" />}
+    >
+      <div
+        ref={panelRef}
+        className="bg-white z-40 flex flex-col rounded-lg shadow-lg border border-slate-200 select-none"
+        style={{
+          width: `${dimensions.width}px`,
+          height: `${dimensions.height}px`,
+          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+          position: 'fixed',
+          overflow: 'hidden'
+        }}
+      >
+        <div className="py-3 px-4 border-b border-slate-200 flex justify-between items-center bg-blue-50">
+          <div className="flex items-center">
+            <div className="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
+            <h3 className="font-medium text-slate-700">
+              Node Details for {selectedPoint.formattedLabel}
+            </h3>
+          </div>
+          <div className="flex items-center">
+            <div className="text-xs text-slate-500 mr-3">Resize from corner</div>
+            <button 
+              onClick={onClose}
+              className="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-100 rounded close-button"
             >
-              <div 
-                className="w-3 h-3 rounded-full" 
-                style={{ backgroundColor: nodeColors[nodeName] }}
-              />
-              <span className="text-sm text-slate-600 truncate flex-1">
-                {nodeName.replace('node_', 'Node ')}
-              </span>
-              <span className="text-sm font-medium text-slate-700">
-                {item.value.toFixed(2)} GB
-              </span>
-            </div>
-          );
-        })}
-      </div>
-      
-      {/* Summary footer */}
-      <div className="p-4 border-t border-slate-200 bg-slate-50">
-        <div className="grid grid-cols-2 gap-4">
-          {selectedPoint.totalUtilization !== undefined && (
-            <div className="bg-white p-3 rounded-lg shadow-sm">
-              <div className="text-xs text-slate-500">Total Utilization</div>
-              <div className="text-lg font-medium text-purple-600">
-                {selectedPoint.totalUtilization.toFixed(2)} GB
-              </div>
-            </div>
-          )}
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+        
+        <div className="p-4 border-b border-slate-200">
+          <div className="flex items-center space-x-2 bg-slate-50 rounded-lg px-3 py-2">
+            <Search size={16} className="text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search nodes..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-transparent border-none text-sm focus:outline-none"
+            />
+          </div>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-3">
+          {/* Table Header with Sortable Columns */}
+          <div className="flex items-center space-x-3 p-2 border-b border-slate-100 mb-2 font-medium text-sm text-slate-500">
+            <div className="w-4"></div>
+            <button 
+              onClick={() => requestSort('dataKey')}
+              className={`flex items-center flex-1 text-left hover:text-slate-800 ${sortConfig.key === 'dataKey' ? 'text-slate-800' : ''}`}
+            >
+              Node {getSortDirectionArrow('dataKey')}
+            </button>
+            <button 
+              onClick={() => requestSort('value')}
+              className={`flex items-center w-20 text-right justify-end hover:text-slate-800 ${sortConfig.key === 'value' ? 'text-slate-800' : ''}`}
+            >
+              Utilization {getSortDirectionArrow('value')}
+            </button>
+            <button 
+              onClick={() => requestSort('capacity')}
+              className={`flex items-center w-20 text-right justify-end hover:text-slate-800 ${sortConfig.key === 'capacity' ? 'text-slate-800' : ''}`}
+            >
+              Capacity {getSortDirectionArrow('capacity')}
+            </button>
+          </div>
           
-          {selectedPoint.totalCapacity !== undefined && (
-            <div className="bg-white p-3 rounded-lg shadow-sm">
-              <div className="text-xs text-slate-500">Total Capacity</div>
-              <div className="text-lg font-medium text-red-600">
-                {selectedPoint.totalCapacity.toFixed(2)} GB
-              </div>
+          {sortedNodes.length === 0 && (
+            <div className="text-center p-4 text-slate-500">
+              No nodes match your search query
             </div>
           )}
+          {sortedNodes.map((item, index) => {
+            const nodeName = item.dataKey;
+            const capacityValue = selectedPoint.capacities?.[nodeName] || 0;
+            
+            return (
+              <div 
+                key={index}
+                className="flex items-center space-x-3 p-2 hover:bg-slate-50 rounded-md transition-colors mb-1"
+              >
+                <div 
+                  className="w-4 h-4 rounded-full" 
+                  style={{ backgroundColor: nodeColors[nodeName] }}
+                />
+                <span className="text-sm text-slate-600 truncate flex-1">
+                  {nodeName.replace('node_', 'Node ')}
+                </span>
+                <span className="text-sm font-medium text-purple-600 w-20 text-right">
+                  {item.value.toFixed(2)} GB
+                </span>
+                <span className="text-sm font-medium text-red-600 w-20 text-right">
+                  {capacityValue.toFixed(2)} GB
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        
+        {/* Summary footer */}
+        <div className="p-4 border-t border-slate-200 bg-slate-50">
+          <div className="grid grid-cols-2 gap-4">
+            {selectedPoint.totalUtilization !== undefined && (
+              <div className="bg-white p-3 rounded-lg shadow-sm">
+                <div className="text-xs text-slate-500">Total Utilization</div>
+                <div className="text-lg font-medium text-purple-600">
+                  {selectedPoint.totalUtilization.toFixed(2)} GB
+                </div>
+              </div>
+            )}
+            
+            {selectedPoint.totalCapacity !== undefined && (
+              <div className="bg-white p-3 rounded-lg shadow-sm">
+                <div className="text-xs text-slate-500">Total Capacity</div>
+                <div className="text-lg font-medium text-red-600">
+                  {selectedPoint.totalCapacity.toFixed(2)} GB
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </Resizable>
   );
 };
 
@@ -333,7 +477,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
     // Reset details view when data changes
     setDetailsVisible(false);
     setSelectedPoint(null);
-  }, [selectedPeriod, data?.time_series?.nodes_timeseries, selectedNodes]); // Added selectedNodes as dependency
+  }, [selectedPeriod, data?.time_series?.nodes_timeseries, selectedNodes]);
 
   const formatTimeLabel = (timestamp) => {
     if (!timestamp) return '';
@@ -534,10 +678,23 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                         value
                       }));
                     
+                    // Collect capacity values for each node
+                    const capacities = {};
+                    Object.entries(pointData)
+                      .filter(([key, value]) => 
+                        key.includes('_total') && 
+                        selectedNodes[key.replace('_total', '')]
+                      )
+                      .forEach(([key, value]) => {
+                        const nodeName = key.replace('_total', '');
+                        capacities[nodeName] = value;
+                      });
+                    
                     setSelectedPoint({
                       label: pointData.timestamp,
                       formattedLabel: formatTimeLabel(pointData.timestamp),
                       nodes: nodesWithValues,
+                      capacities: capacities,
                       totalUtilization: pointData.total_utilization,
                       totalCapacity: pointData.total_capacity
                     });
@@ -664,7 +821,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
               </LineChart>
           </ResponsiveContainer>
           
-          {/* Overlay the details panel instead of replacing the chart */}
+          {/* Render the details panel */}
           {detailsVisible && selectedPoint && (
             <DetailsPanel 
               selectedPoint={selectedPoint}
