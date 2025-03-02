@@ -6,6 +6,9 @@ import numpy as np
 from datetime import datetime, timedelta
 from flask_cors import CORS
 from functools import wraps
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__, static_folder='../frontend/dashboard-app/dist')
 CORS(app)

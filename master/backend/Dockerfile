@@ -13,6 +13,9 @@ RUN pip install --no-cache-dir -r requirements_server.txt gunicorn
 # Copy backend code
 COPY master/backend ./backend
 
+# Copy .env file to /app
+COPY .env /app/.env
+
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
