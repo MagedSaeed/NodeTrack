@@ -8,7 +8,7 @@ load_dotenv()
 
 UPDATE_INTERVAL = os.getenv("UPDATE_INTERVAL")
 if not UPDATE_INTERVAL:
-    UPDATE_INTERVAL = 60
+    raise ValueError("UPDATE_INTERVAL env var should be set")
 else:
     UPDATE_INTERVAL = int(UPDATE_INTERVAL)
 
