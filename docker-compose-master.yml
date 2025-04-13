@@ -4,8 +4,10 @@ services:
     container_name: timescaledb
     ports:
       - "5432:5432"
-    env_file:
-      - ./.env
+    environment:
+      - POSTGRES_USER=${TIMESCALE_DB_USER}
+      - POSTGRES_PASSWORD=${TIMESCALE_DB_PASSWORD}
+      - POSTGRES_DB=${TIMESCALE_DB_NAME}
     volumes:
       - ./data/timescale_db:/var/lib/postgresql/data
     restart: unless-stopped
