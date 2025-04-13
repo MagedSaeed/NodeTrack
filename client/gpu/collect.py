@@ -33,7 +33,7 @@ def collect_gpu_stats_and_send():
                 "memory_used": 0,
                 "memory_total": gpu.memory_total,
                 "command": None,
-                "status": "idle"
+                "status": "idle",
             }
             usage_data.append(entry)
         else:
@@ -48,7 +48,7 @@ def collect_gpu_stats_and_send():
                     "memory_used": process["gpu_memory_usage"],
                     "memory_total": gpu.memory_total,
                     "command": process["command"],
-                    "status": "active"
+                    "status": "active",
                 }
                 usage_data.append(entry)
 

@@ -1,0 +1,43 @@
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: timescaledb
+    ports:
+      - "5432:5432"
+    env_file:
+      - ./.env
+    volumes:
+      - ./data/timescale_db:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  # Backend service
+  backend:
+    build:
+      context: .
+      dockerfile: master/backend/Dockerfile
+    image: nodetrack-master-backend:latest
+    container_name: nodetrack-backend
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./.env
+    volumes:
+      - ./data:/app/backend/data
+    depends_on:
+      - timescaledb
+    restart: unless-stopped
+
+  # Frontend service
+  frontend:
+    build:
+      context: .
+      dockerfile: master/frontend/Dockerfile
+    image: nodetrack-master-frontend:latest
+    container_name: nodetrack-frontend
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./.env
+    depends_on:
+      - backend
+    restart: unless-stopped
