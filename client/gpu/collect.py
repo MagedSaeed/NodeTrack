@@ -54,7 +54,7 @@ def collect_gpu_stats_and_send():
 
     # Send to master
     try:
-        response = requests.post(f"http://{SERVER_ADDRESS}:5000/submit", json=usage_data)
+        response = requests.post(f"http://{SERVER_ADDRESS}:5000/gpu/submit", json=usage_data)
         response.raise_for_status()  # Raise an exception for bad status codes
     except Exception as e:
         print(f"Error sending data to master: {str(e)}")
