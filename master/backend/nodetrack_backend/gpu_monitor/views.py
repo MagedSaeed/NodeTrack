@@ -28,8 +28,8 @@ def submit_gpu_data(request):
     for item in bulk_data:
         if not item.get('memory_used'):
             item['memory_used'] = 0
-            # add ip address from the request
-            item['ip_address'] = clien_ip
+        # add ip address from the request
+        item['ip_address'] = clien_ip
     created_count = 0
     
     for entry in bulk_data:
