@@ -7,4 +7,4 @@ class HasAPIToken(BasePermission):
         request_token = request.query_params.get('token')
         
         # Check if token matches the one in settings
-        return request_token and request_token == settings.API_TOKEN
+        return request_token and request_token == settings.API_ACCESS_TOKEN

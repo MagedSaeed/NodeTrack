@@ -32,8 +32,5 @@ WORKDIR /app/backend
 # Make entrypoint script executable
 RUN chmod +x /app/backend/docker-entrypoint.sh
 
-# Make entrypoint script executable (already seems to be executable)
-RUN chmod +x /app/backend/docker-entrypoint.sh
-
 # Command to run the entrypoint script with bash
 CMD ["/bin/sh", "/app/backend/docker-entrypoint.sh"]

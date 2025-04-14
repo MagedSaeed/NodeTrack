@@ -31,9 +31,12 @@ DEBUG = True
 
 ALLOWED_HOSTS = os.environ['DJANGO_ALLOWED_HOSTS'].split(',')
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-]
+CORS_ALLOWED_ORIGINS = list(
+    map(
+        lambda server: f'http://{server}:3000',
+        os.environ['DJANGO_ALLOWED_HOSTS'].split(','),
+        ),
+    )
 
 
 # Application definition
@@ -165,6 +168,3 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-
-API_TOKEN = os.environ.get('API_ACCESS_TOKEN')
