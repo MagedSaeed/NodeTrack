@@ -27,3 +27,9 @@ to reset VITE env vars:
 ```bash
 for var in ${(k)parameters}; do [[ $var == VITE_* ]] && unset $var; done
 ```
+
+to run the master stack using docker-compose, use:
+
+```bash
+docker-compose -f docker-compose-master.yml down; docker-compose -f docker-compose-master.yml up -d --build;
+```
