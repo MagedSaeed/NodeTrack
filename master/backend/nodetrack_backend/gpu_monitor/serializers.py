@@ -1,16 +1,15 @@
 from rest_framework import serializers
-from core.models import Node
-from gpu_monitor.models import GPU, GPUUsage
+from gpu_monitor.models import GPU
 
 class GPUUsageSubmitSerializer(serializers.Serializer):
-    hostname = serializers.CharField()
     gpu_id = serializers.CharField()
-    username = serializers.CharField()
-    memory_used = serializers.IntegerField()
-    memory_total = serializers.IntegerField()
-    timestamp = serializers.DateTimeField()
     gpu_name = serializers.CharField()
+    hostname = serializers.CharField()
+    timestamp = serializers.DateTimeField()
+    memory_used = serializers.FloatField()
+    memory_total = serializers.FloatField()
     ip_address = serializers.IPAddressField()
+    username = serializers.CharField(required=False, allow_null=True)
     
 
 class GPUSerializer(serializers.ModelSerializer):

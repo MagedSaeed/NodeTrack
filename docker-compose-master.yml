@@ -36,6 +36,8 @@ services:
       dockerfile: master/frontend/Dockerfile
     image: nodetrack-master-frontend:latest
     container_name: nodetrack-frontend
+    environment:
+    - TZ=Asia/Riyadh
     ports:
       - "3000:3000"
     env_file:

@@ -168,3 +168,10 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# timezone settings
+
+TIME_ZONE = 'Asia/Riyadh'
+
+# If you want Django to use this timezone for rendering times
+USE_TZ = True

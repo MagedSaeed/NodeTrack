@@ -9,7 +9,7 @@ class GPU(models.Model):
     node = models.ForeignKey(Node, on_delete=models.CASCADE, related_name='gpus')
     gpu_id = models.CharField(max_length=50)
     name = models.CharField(max_length=100)
-    memory_total = models.BigIntegerField(help_text="Total memory in MB")
+    memory_total = models.FloatField(help_text="Total memory in MB")
     
     class Meta:
         unique_together = ('node', 'gpu_id')
@@ -27,7 +27,7 @@ class GPUUsage(TimescaleModel):
     """
     gpu = models.ForeignKey(GPU, on_delete=models.CASCADE, related_name='usage_records')
     username = models.CharField(max_length=100)
-    memory_used = models.BigIntegerField(help_text="Memory used in MB")
+    memory_used = models.FloatField(help_text="Memory used in MB") # set this to float
     
     # This replaces the previous 'timestamp' field
     # TimescaleModel already includes a 'time' field of type TimescaleDateTimeField

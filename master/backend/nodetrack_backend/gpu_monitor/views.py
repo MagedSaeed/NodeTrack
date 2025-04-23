@@ -1,12 +1,8 @@
 from django.db.models import Sum, Avg, Max, Min, Count
-from django.db.models.functions import TruncHour, TruncDay, TruncWeek, TruncMonth
 from rest_framework import status
 from rest_framework.response import Response
-from rest_framework.decorators import api_view, permission_classes, authentication_classes
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.authentication import TokenAuthentication
+from rest_framework.decorators import api_view, permission_classes
 from datetime import datetime, timedelta
-from django.db.models import Func
 from ipware.ip import get_client_ip
 from django.utils import timezone  # Import timezone module
 
@@ -55,13 +51,14 @@ def submit_gpu_data(request):
             if timezone.is_naive(timestamp):
                 timestamp = timezone.make_aware(timestamp)
                 
-            GPUUsage.objects.create(
-                gpu=gpu,
-                username=data['username'],
-                memory_used=data['memory_used'],
-                time=timestamp  # Use timezone-aware timestamp
-            )
-            created_count += 1
+            if data.get('username'): # consider only the usage when the GPU is not idle (there is a process asssociated with the GPU)
+                GPUUsage.objects.create(
+                    gpu=gpu,
+                    username=data['username'],
+                    memory_used=data['memory_used'],
+                    time=timestamp  # Use timezone-aware timestamp
+                )
+                created_count += 1
             
     return Response({
         'status': 'success', 
@@ -160,7 +157,7 @@ def generate_gpu_report(request):
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-def get_gpu_time_series_data(usage_data, period='hour', start_time=None, end_time=None):
+def get_gpu_time_series_data(usage_data, period='hour', start_time=None, end_time=None, grace_period_minutes=15):
     # Convert period to TimescaleDB time_bucket interval format
     period_map = {
         'hour': '1 hour',
@@ -169,6 +166,9 @@ def get_gpu_time_series_data(usage_data, period='hour', start_time=None, end_tim
         'month': '1 month'
     }
     bucket_interval = period_map[period]
+    
+    # Define grace period based on the parameter
+    grace_period = timedelta(minutes=grace_period_minutes)
     
     # Ensure start_time and end_time are timezone aware
     if start_time and timezone.is_naive(start_time):
@@ -184,111 +184,173 @@ def get_gpu_time_series_data(usage_data, period='hour', start_time=None, end_tim
     
     # Function to truncate timestamps to the appropriate precision
     def truncate_timestamp(ts):
-        if period == 'hour':
-            return ts.replace(minute=0, second=0, microsecond=0)
-        elif period == 'day':
-            return ts.replace(hour=0, minute=0, second=0, microsecond=0)
-        elif period == 'week':
-            # For weekly, truncate to the start of the week (assuming Monday is the first day)
-            days_since_monday = ts.weekday()
-            return (ts - timedelta(days=days_since_monday)).replace(
-                hour=0, minute=0, second=0, microsecond=0)
-        elif period == 'month':
-            # For monthly, truncate to the first day of the month
-            return ts.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        return ts
+        return ts.replace(minute=0, second=0, microsecond=0)
+        # if period == 'hour':
+        #     return ts.replace(minute=0, second=0, microsecond=0)
+        # elif period == 'day':
+        #     return ts.replace(hour=0, minute=0, second=0, microsecond=0)
+        # elif period == 'week':
+        #     # For weekly, truncate to the start of the week (assuming Monday is the first day)
+        #     days_since_monday = ts.weekday()
+        #     return (ts - timedelta(days=days_since_monday)).replace(
+        #         hour=0, minute=0, second=0, microsecond=0)
+        # elif period == 'month':
+        #     # For monthly, truncate to the first day of the month
+        #     return ts.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        # return ts
     
     # Get time series data per node
     nodes_timeseries = []
     
     for node in nodes:
-        # Get actual data points for this node using the standard time_bucket function
-        node_data = GPUUsage.timescale.filter(
-            gpu__node=node,
-            time__lte=end_time,
-            time__gte=start_time,
-        ).distinct().time_bucket('time', bucket_interval).values('bucket').annotate(
-            memory_used=Sum('memory_used')
-        ).order_by('bucket')
-        
-        # Get total memory capacity for this node's GPUs
+        # Get node-specific data in single query
         node_memory_total = GPU.objects.filter(
             node=node
         ).aggregate(total=Sum('memory_total'))['total'] or 0
         
-        # Convert query results to list for timeseries
+        # Get the raw data points for this node
+        raw_node_data = GPUUsage.timescale.filter(
+            gpu__node=node,
+            time__lte=end_time,
+            time__gte=start_time,
+        ).values('time').annotate(
+            total_memory_used=Sum('memory_used')
+        ).order_by('time')
+
+        # Now process in Python to bucket by time
+        from collections import defaultdict
+        time_buckets = defaultdict(list)
+
+        for entry in raw_node_data:
+            # Determine which bucket this timestamp belongs to
+            bucket_time = truncate_timestamp(entry['time'])
+            time_buckets[bucket_time].append(entry['total_memory_used'])
+
+        # Calculate the average for each bucket
+        node_data = []
+        for bucket_time, values in time_buckets.items():
+            avg_memory_used = sum(values) / len(values) if values else 0
+            node_data.append({
+                'bucket': bucket_time,
+                'memory_used': avg_memory_used
+            })
+
+        # Sort by bucket time
+        node_data.sort(key=lambda x: x['bucket'])
+        
+        # Pre-fetch ALL raw data points for this node within the timeframe (plus grace periods)
+        # This eliminates the need for multiple individual queries later
+        extended_start = start_time - grace_period if start_time else None
+        extended_end = end_time + grace_period if end_time else None
+        
+        # Get all activity timestamps in one query
+        all_activity_times = list(GPUUsage.timescale.filter(
+            gpu__node=node,
+            time__lte=extended_end,
+            time__gte=extended_start,
+        ).values_list('time', flat=True).distinct().order_by('time'))
+        
+        # Create activity lookup dictionary for efficient checks
+        # Key: truncated timestamp, Value: set of all activity timestamps within that bucket
+        activity_by_bucket = {}
+        
+        for activity_time in all_activity_times:
+            truncated = truncate_timestamp(activity_time)
+            if truncated not in activity_by_bucket:
+                activity_by_bucket[truncated] = set()
+            activity_by_bucket[truncated].add(activity_time)
+        
+        # Build the timeseries
         timeseries = []
         
-        if node_data:
-            # Create a dictionary of data points keyed by truncated timestamps
-            data_by_truncated_bucket = {}
-            for data_point in node_data:
-                bucket = data_point['bucket']
-                truncated_bucket = truncate_timestamp(bucket)
-                data_by_truncated_bucket[truncated_bucket] = data_point['memory_used'] or 0
-                
-                # Add each data point to the timeseries
-                timeseries.append({
-                    'timestamp': bucket.isoformat(),
-                    'memory_total': float(node_memory_total/1024),  # Convert to GB
-                    'memory_used': float(data_point['memory_used'] or 0) / 1024,  # Convert to GB
-                    'is_active': True  # We know this point has data since it came from the database
-                })
-                
-            # If we have data and need to fill in missing periods
-            if start_time and end_time:
-                # Generate all possible time buckets for the given period
-                current_bucket = truncate_timestamp(start_time)
-                end_truncated = truncate_timestamp(end_time)
-                
-                while current_bucket <= end_truncated:
-                    # Check if this bucket exists in our data
-                    if current_bucket not in data_by_truncated_bucket:
-                        # Add a zero-value entry for this time point
-                        timeseries.append({
-                            'timestamp': current_bucket.isoformat(),
-                            'memory_total': float(node_memory_total/1024),  # Convert to GB
-                            'memory_used': 0.0,
-                            'is_active': False  # Flag to indicate no data exists for this timepoint
-                        })
+        # Process the bucketed data points first
+        data_by_truncated_bucket = {}
+        for data_point in node_data:
+            bucket = data_point['bucket']
+            truncated_bucket = truncate_timestamp(bucket)
+            data_by_truncated_bucket[truncated_bucket] = data_point['memory_used'] or 0
+            
+            timeseries.append({
+                'timestamp': bucket.isoformat(),
+                'memory_total': float(node_memory_total/1024),  # Convert to GB
+                'memory_used': float(data_point['memory_used'] or 0) / 1024,  # Convert to GB
+                'is_active': True  # We know this point has data
+            })
+        
+        # Generate missing time buckets
+        if start_time and end_time:
+            current_bucket = truncate_timestamp(start_time)
+            end_truncated = truncate_timestamp(end_time)
+            
+            while current_bucket <= end_truncated:
+                # Only process if not already in our data
+                if current_bucket not in data_by_truncated_bucket:
+                    # Define grace period window
+                    grace_start = current_bucket - grace_period
+                    grace_end = current_bucket + grace_period
                     
-                    # Increment the bucket based on the period
+                    # Efficiently check if there's activity in grace period
+                    is_active = False
+                    
+                    # Check the current bucket and adjacent buckets that might overlap with grace period
+                    possible_buckets = [current_bucket]
+                    
+                    # Add previous bucket if it could contain activity within grace period
                     if period == 'hour':
-                        current_bucket += timedelta(hours=1)
+                        prev_bucket = current_bucket - timedelta(hours=1)
+                        next_bucket = current_bucket + timedelta(hours=1)
                     elif period == 'day':
-                        current_bucket += timedelta(days=1)
+                        prev_bucket = current_bucket - timedelta(days=1)
+                        next_bucket = current_bucket + timedelta(days=1)
                     elif period == 'week':
-                        current_bucket += timedelta(weeks=1)
-                    elif period == 'month':
-                        # Approximating a month as 30 days
-                        current_bucket += timedelta(days=30)
-                
-                # Sort the combined timeseries by timestamp
-                timeseries.sort(key=lambda x: x['timestamp'])
-        else:
-            # If no data exists for this node in the time range, generate empty timeseries
-            if start_time and end_time:
-                current_bucket = truncate_timestamp(start_time)
-                end_truncated = truncate_timestamp(end_time)
-                
-                while current_bucket <= end_truncated:
+                        prev_bucket = current_bucket - timedelta(weeks=1)
+                        next_bucket = current_bucket + timedelta(weeks=1)
+                    else:  # month
+                        # Approximate
+                        prev_bucket = (current_bucket.replace(day=1) - timedelta(days=1)).replace(day=1)
+                        # Next month (approximate)
+                        if current_bucket.month == 12:
+                            next_bucket = current_bucket.replace(year=current_bucket.year+1, month=1, day=1)
+                        else:
+                            next_bucket = current_bucket.replace(month=current_bucket.month+1, day=1)
+                    
+                    possible_buckets.extend([prev_bucket, next_bucket])
+                    
+                    # Check each possible bucket for activity within grace period
+                    for check_bucket in possible_buckets:
+                        if check_bucket in activity_by_bucket:
+                            # Check each timestamp in this bucket
+                            for timestamp in activity_by_bucket[check_bucket]:
+                                if grace_start <= timestamp <= grace_end:
+                                    is_active = True
+                                    break
+                        if is_active:
+                            break
+                    
+                    # Add entry with correct active status
                     timeseries.append({
                         'timestamp': current_bucket.isoformat(),
                         'memory_total': float(node_memory_total/1024),  # Convert to GB
                         'memory_used': 0.0,
-                        'is_active': False  # Flag to indicate no data exists for this timepoint
+                        'is_active': is_active
                     })
-                    
-                    # Increment the bucket based on the period
-                    if period == 'hour':
-                        current_bucket += timedelta(hours=1)
-                    elif period == 'day':
-                        current_bucket += timedelta(days=1)
-                    elif period == 'week':
-                        current_bucket += timedelta(weeks=1)
-                    elif period == 'month':
-                        # Approximating a month as 30 days
-                        current_bucket += timedelta(days=30)
+                
+                # Increment the bucket based on the period
+                if period == 'hour':
+                    current_bucket += timedelta(hours=1)
+                elif period == 'day':
+                    current_bucket += timedelta(days=1)
+                elif period == 'week':
+                    current_bucket += timedelta(weeks=1)
+                elif period == 'month':
+                    # Properly increment to next month
+                    if current_bucket.month == 12:
+                        current_bucket = current_bucket.replace(year=current_bucket.year+1, month=1, day=1)
+                    else:
+                        current_bucket = current_bucket.replace(month=current_bucket.month+1, day=1)
+            
+            # Sort the combined timeseries by timestamp
+            timeseries.sort(key=lambda x: x['timestamp'])
         
         nodes_timeseries.append({
             f'node_{node.hostname}': timeseries

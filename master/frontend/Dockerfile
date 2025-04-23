@@ -1,4 +1,14 @@
-FROM node:18-alpine
+FROM node:23-alpine
+
+# Update and install required packages
+RUN apk update && apk add bash tzdata
+
+# Set the timezone to Dammam, Saudi Arabia (Asia/Riyadh is the timezone for KSA)
+RUN cp /usr/share/zoneinfo/Asia/Riyadh /etc/localtime && \
+    echo "Asia/Riyadh" > /etc/timezone
+
+# Set bash as the default shell for the container
+SHELL ["/bin/bash", "-c"]
 
 # Create the full directory structure
 WORKDIR /app/master/frontend/dashboard-app

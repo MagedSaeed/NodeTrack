@@ -29,19 +29,27 @@ const generateDistinctColors = (count) => {
 
 const getPeriodKey = (date, period) => {
   const d = new Date(date);
+  
+  // Store the complete ISO string to avoid parsing errors later
+  const fullIsoString = d.toISOString();
+  
   switch (period) {
     case 'hour':
-      return d.toISOString().slice(0, 13);
+      // Return the full ISO string to ensure proper date parsing
+      return fullIsoString;
     case 'day':
-      return d.toISOString().slice(0, 10);
+      const dayStart = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0));
+      return dayStart.toISOString();
     case 'week':
       const weekStart = new Date(d);
-      weekStart.setDate(d.getDate() - d.getDay());
-      return weekStart.toISOString().slice(0, 10);
+      weekStart.setUTCDate(d.getUTCDate() - d.getUTCDay());
+      weekStart.setUTCHours(0, 0, 0, 0);
+      return weekStart.toISOString();
     case 'month':
-      return d.toISOString().slice(0, 7);
+      const monthStart = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1, 0, 0, 0));
+      return monthStart.toISOString();
     default:
-      return d.toISOString();
+      return fullIsoString;
   }
 };
 // Fixed CustomTooltip with proper isActive parameter calculation and consistent styling
@@ -697,10 +705,17 @@ const TimeSeriesUtilizationCard = ({ data }) => {
     if (isNaN(date.getTime())) {
       return timestamp;
     }
-
+  
     switch (selectedPeriod.value) {
       case 'hour':
-        return `${date.getHours().toString().padStart(2, '0')}:00`;
+        // Option 1: Use browser's local timezone (for Riyadh/KSA users)
+        const year = date.getFullYear();
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const day = date.getDate().toString().padStart(2, '0');
+        const hours = date.getHours().toString().padStart(2, '0');
+        
+        return `${year}-${month}-${day}T${hours}`;
+        
       case 'day':
         return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
       case 'week':
