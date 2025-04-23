@@ -8,6 +8,17 @@ log() {
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1"
 }
 
+
+# add this to setup db connection
+# docker run -d \
+#   --name timescaledb \
+#   -p 5432:5432 \
+#   -e POSTGRES_PASSWORD=aaa123 \
+#   -e POSTGRES_USER=postgres \
+#   -e POSTGRES_DB=nodetrack \
+#   -v /home/majed.alshaibani/Projects/NodeTrack/data/timescale_db:/var/lib/postgresql/data \
+#   timescale/timescaledb:latest-pg15
+
 # Function to cleanup containers and images
 cleanup_containers() {
     local image_name=$1

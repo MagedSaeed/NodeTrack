@@ -17,7 +17,7 @@ const GPU = () => {
       const serverAddress = import.meta.env.VITE_SERVER_ADDRESS;
       
       // Construct URL with date parameters
-      const url = new URL(`http://${serverAddress}:5000/report`);
+      const url = new URL(`http://${serverAddress}:5000/gpu/report`);
       if (startDate) url.searchParams.append('start_date', startDate);
       if (endDate) url.searchParams.append('end_date', endDate);
 

@@ -29,88 +29,213 @@ const generateDistinctColors = (count) => {
 
 const getPeriodKey = (date, period) => {
   const d = new Date(date);
+  
+  // Store the complete ISO string to avoid parsing errors later
+  const fullIsoString = d.toISOString();
+  
   switch (period) {
     case 'hour':
-      return d.toISOString().slice(0, 13);
+      // Return the full ISO string to ensure proper date parsing
+      return fullIsoString;
     case 'day':
-      return d.toISOString().slice(0, 10);
+      const dayStart = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0));
+      return dayStart.toISOString();
     case 'week':
       const weekStart = new Date(d);
-      weekStart.setDate(d.getDate() - d.getDay());
-      return weekStart.toISOString().slice(0, 10);
+      weekStart.setUTCDate(d.getUTCDate() - d.getUTCDay());
+      weekStart.setUTCHours(0, 0, 0, 0);
+      return weekStart.toISOString();
     case 'month':
-      return d.toISOString().slice(0, 7);
+      const monthStart = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1, 0, 0, 0));
+      return monthStart.toISOString();
     default:
-      return d.toISOString();
+      return fullIsoString;
   }
 };
-
-// Custom tooltip component that can be toggled to show detailed nodes list
+// Fixed CustomTooltip with proper isActive parameter calculation and consistent styling
+// CustomTooltip with cluster-wide active/inactive status
 const CustomTooltip = ({ active, payload, label, nodeColors, selectedNodes, formatTimeLabel }) => {
   if (!active || !payload || !payload.length) return null;
+  const topNodesCount = 3;
   
-  // Get all selected nodes with values
-  const nodesWithValues = payload.filter(item => {
-    const dataKey = item.dataKey;
-    return !dataKey.includes('_total') && 
-           dataKey !== 'total_utilization' && 
-           dataKey !== 'total_capacity' && 
-           selectedNodes[dataKey] && 
-           item.value !== undefined;
-  });
+  // Direct access to the data object like the details panel does
+  const pointData = payload[0].payload;
   
-  // Sort nodes by utilization (highest to lowest) and take top 5
-  const topUtilizedNodes = [...nodesWithValues]
+  // Collect nodes exactly like the details panel
+  const nodesWithValues = Object.entries(pointData)
+    .filter(([key, value]) => 
+      !key.includes('_total') && 
+      !key.includes('_is_active') &&
+      key !== 'timestamp' && 
+      key !== 'total_utilization' && 
+      key !== 'total_capacity' &&
+      selectedNodes[key]
+    )
+    .map(([key, value]) => ({
+      dataKey: key,
+      value
+    }));
+  
+  // Collect active status exactly like the details panel
+  const activeStatus = {};
+  Object.entries(pointData)
+    .filter(([key]) => key.includes('_is_active'))
+    .forEach(([key, value]) => {
+      const nodeName = key.replace('_is_active', '');
+      activeStatus[nodeName] = value;
+    });
+  
+  // Sort and take top topNodesCount
+  const topNodes = [...nodesWithValues]
     .sort((a, b) => b.value - a.value)
-    .slice(0, 5);
+    .slice(0, topNodesCount);
   
-  // Get total values if they exist
-  const totalUtilization = payload.find(item => item.dataKey === 'total_utilization')?.value;
-  const totalCapacity = payload.find(item => item.dataKey === 'total_capacity')?.value;
+  // Count active nodes for top 5
+  const activeTopCount = topNodes.filter(item => 
+    activeStatus[item.dataKey] === true
+  ).length;
+  
+  // Calculate cluster-wide status for all nodes
+  const totalNodeCount = nodesWithValues.length;
+  const activeNodeCount = nodesWithValues.filter(item => 
+    activeStatus[item.dataKey] === true
+  ).length;
+  const inactiveNodeCount = totalNodeCount - activeNodeCount;
+  
+  // Calculate percentage active
+  const activePercentage = totalNodeCount > 0 
+    ? Math.round((activeNodeCount / totalNodeCount) * 100) 
+    : 0;
+  
+  // Determine status level based on percentage active
+  let statusColor = 'text-green-500';
+  let statusBg = 'bg-green-50';
+  if (activePercentage < 50) {
+    statusColor = 'text-red-500';
+    statusBg = 'bg-red-50';
+  } else if (activePercentage < 80) {
+    statusColor = 'text-yellow-500';
+    statusBg = 'bg-yellow-50';
+  }
   
   return (
-    <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3 max-w-xs pointer-events-none">
+    <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-4 max-w-xs pointer-events-none">
       <div className="mb-2">
-        <h3 className="font-medium text-slate-700">{formatTimeLabel(label)}</h3>
-        <div className="text-xs text-slate-500">Click point to see details</div>
+        <h3 className="font-medium text-slate-700 text-base">{formatTimeLabel(label)}</h3>
+        <div className="text-xs text-slate-500 mt-1">Click point to see details</div>
+      </div>
+      
+      {/* Cluster-wide status indicator */}
+      <div className={`mb-3 px-3 py-2 rounded-md ${statusBg} border border-slate-200`}>
+        <div className="flex justify-between items-center mb-1">
+          <span className="text-xs font-medium text-slate-600">Cluster Status:</span>
+          <span className={`text-xs font-medium ${statusColor}`}>
+            {activePercentage}% Active
+          </span>
+        </div>
+        <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center">
+            <div className="w-2 h-2 bg-green-500 rounded-full mr-1"></div>
+            <span className="text-slate-600">{activeNodeCount} active</span>
+          </div>
+          <div className="flex items-center">
+            <div className="w-2 h-2 bg-slate-400 rounded-full mr-1"></div>
+            <span className="text-slate-600">{inactiveNodeCount} inactive</span>
+          </div>
+        </div>
+        
+        {/* Progress bar showing active percentage */}
+        <div className="mt-2 h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+          <div 
+            className={`h-full rounded-full ${
+              activePercentage < 50 ? 'bg-red-500' : 
+              activePercentage < 80 ? 'bg-yellow-500' : 'bg-green-500'
+            }`}
+            style={{ width: `${activePercentage}%` }}
+          ></div>
+        </div>
       </div>
       
       {/* Show top 5 most utilized nodes in tooltip */}
-      {topUtilizedNodes.length > 0 && (
+      {topNodes.length > 0 && (
         <div className="text-xs text-slate-600">
-          <div className="text-xs font-medium text-slate-500 mb-1">Top Utilized Nodes:</div>
-          {topUtilizedNodes.map((item, index) => (
-            <div key={index} className="flex items-center space-x-2 my-1">
-              <div 
-                className="w-2 h-2 rounded-full" 
-                style={{ backgroundColor: nodeColors[item.dataKey] }}
-              />
-              <span className="truncate">{item.dataKey.replace('node_', 'Node ')}</span>
-              <span className="font-medium text-purple-600">{item.value.toFixed(2)} GB</span>
+          <div className="flex justify-between items-center mb-2">
+            <div className="text-xs font-medium text-slate-500">Top Utilized Nodes:</div>
+            
+            {/* Add active status summary for top nodes */}
+            <div className="flex items-center">
+              <span className={`text-xs ${activeTopCount === 0 ? 'text-red-500 font-medium' : 'text-slate-500'}`}>
+                {activeTopCount === 0 ? 'All inactive!' : `${activeTopCount}/${topNodes.length} active`}
+              </span>
             </div>
-          ))}
+          </div>
           
-          {nodesWithValues.length > 5 && (
-            <div className="text-slate-500 mt-1 text-center text-xs">
-              +{nodesWithValues.length - 5} more nodes
+          <div className="space-y-1.5">
+            {topNodes.map((item, index) => {
+              const nodeName = item.dataKey;
+              // Use the EXACT same logic as the details panel
+              const isActive = activeStatus[nodeName] === true;
+              
+              return (
+                <div key={index} className="flex items-center py-1">
+                  {/* Node color indicator - using same styling as details panel */}
+                  <div 
+                    className="w-3 h-3 rounded-full flex items-center justify-center flex-shrink-0"
+                    style={{ 
+                      backgroundColor: isActive ? nodeColors[nodeName] : '#94a3b8',
+                      opacity: isActive ? 0.9 : 0.7,
+                      boxShadow: isActive ? 'none' : 'inset 0 0 0 1px ' + nodeColors[nodeName]
+                    }}
+                  >
+                    {!isActive && <div className="w-1 h-1 bg-white rounded-full"></div>}
+                  </div>
+                  
+                  {/* Node name - gray for inactive */}
+                  <span className={`truncate ml-2 mr-1.5 flex-1 ${isActive ? 'text-slate-600' : 'text-slate-400'}`}>
+                    {nodeName.replace('node_', 'Node ')}
+                  </span>
+                  
+                  {/* Memory value - dimmed for inactive */}
+                  <span className={`font-medium flex-shrink-0 ${isActive ? 'text-purple-600' : 'text-purple-400'}`}>
+                    {item.value.toFixed(2)} GB
+                  </span>
+                  
+                  {/* Small inactive label */}
+                  {!isActive && (
+                    <span className="ml-1 text-slate-400 text-xs flex-shrink-0">
+                      (off)
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          
+          {nodesWithValues.length > topNodesCount && (
+            <div className="text-slate-500 mt-2 text-center text-xs">
+              +{nodesWithValues.length - topNodesCount} more nodes
             </div>
           )}
         </div>
       )}
       
-      {/* Total values */}
-      {(totalUtilization !== undefined || totalCapacity !== undefined) && (
-        <div className="mt-2 pt-2 border-t border-slate-100 text-xs">
-          {totalUtilization !== undefined && (
-            <div className="flex justify-between">
+      {/* Total values with improved styling */}
+      {(pointData.total_utilization !== undefined || pointData.total_capacity !== undefined) && (
+        <div className="mt-3 pt-3 border-t border-slate-100 text-xs space-y-2">
+          {pointData.total_utilization !== undefined && (
+            <div className="flex justify-between items-center">
               <span className="text-slate-500">Total Utilization:</span>
-              <span className="font-medium text-purple-600">{totalUtilization.toFixed(2)} GB</span>
+              <span className="font-medium text-purple-600 px-2 py-0.5 bg-purple-50 rounded">
+                {pointData.total_utilization.toFixed(2)} GB
+              </span>
             </div>
           )}
-          {totalCapacity !== undefined && (
-            <div className="flex justify-between">
+          {pointData.total_capacity !== undefined && (
+            <div className="flex justify-between items-center">
               <span className="text-slate-500">Total Capacity:</span>
-              <span className="font-medium text-red-600">{totalCapacity.toFixed(2)} GB</span>
+              <span className="font-medium text-red-600 px-2 py-0.5 bg-red-50 rounded">
+                {pointData.total_capacity.toFixed(2)} GB
+              </span>
             </div>
           )}
         </div>
@@ -119,13 +244,15 @@ const CustomTooltip = ({ active, payload, label, nodeColors, selectedNodes, form
   );
 };
 
-// Fixed position Details panel component
+// Update the DetailsPanel component to show the active status with improved layout
 const DetailsPanel = ({ selectedPoint, nodeColors, onClose, setSelectedNodes }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectAll, setSelectAll] = useState(true);
-  const [dimensions, setDimensions] = useState({ width: 450, height: 550 });
+  // Reduced initial size for a more compact look
+  const [dimensions, setDimensions] = useState({ width: 480, height: 550 });
   const panelRef = useRef(null);
-  const [sortConfig, setSortConfig] = useState({ key: 'dataKey', direction: 'ascending' });
+  // Set default sorting to active status first, then by usage (highest to lowest)
+  const [sortConfig, setSortConfig] = useState({ key: 'default', direction: 'descending' });
   
   // Initialize panel position to center of viewport on mount
   useEffect(() => {
@@ -161,11 +288,26 @@ const DetailsPanel = ({ selectedPoint, nodeColors, onClose, setSelectedNodes }) 
   // Apply sorting to filtered nodes
   const sortedNodes = useMemo(() => {
     let sortableItems = [...filteredNodes];
+    
     if (sortConfig.key && sortConfig.direction) {
       sortableItems.sort((a, b) => {
         let aValue, bValue;
         
-        if (sortConfig.key === 'dataKey') {
+        // Default sorting: active status first, then by usage (value)
+        if (sortConfig.key === 'default') {
+          // First compare active status
+          const aActive = selectedPoint.activeStatus[a.dataKey] ? 1 : 0;
+          const bActive = selectedPoint.activeStatus[b.dataKey] ? 1 : 0;
+          
+          // If active status is different, sort by that
+          if (aActive !== bActive) {
+            return sortConfig.direction === 'descending' ? bActive - aActive : aActive - bActive;
+          }
+          
+          // If both have same active status, sort by value (usage)
+          return sortConfig.direction === 'descending' ? b.value - a.value : a.value - b.value;
+        }
+        else if (sortConfig.key === 'dataKey') {
           aValue = a.dataKey.toLowerCase();
           bValue = b.dataKey.toLowerCase();
         } else if (sortConfig.key === 'value') {
@@ -174,8 +316,17 @@ const DetailsPanel = ({ selectedPoint, nodeColors, onClose, setSelectedNodes }) 
         } else if (sortConfig.key === 'capacity') {
           aValue = selectedPoint.capacities[a.dataKey] || 0;
           bValue = selectedPoint.capacities[b.dataKey] || 0;
+        } else if (sortConfig.key === 'active') {
+          aValue = selectedPoint.activeStatus[a.dataKey] ? 1 : 0;
+          bValue = selectedPoint.activeStatus[b.dataKey] ? 1 : 0;
         }
         
+        // Handle numeric comparisons
+        if (sortConfig.key === 'value' || sortConfig.key === 'capacity' || sortConfig.key === 'active') {
+          return sortConfig.direction === 'ascending' ? aValue - bValue : bValue - aValue;
+        }
+        
+        // Handle string comparisons
         if (aValue < bValue) {
           return sortConfig.direction === 'ascending' ? -1 : 1;
         }
@@ -186,7 +337,7 @@ const DetailsPanel = ({ selectedPoint, nodeColors, onClose, setSelectedNodes }) 
       });
     }
     return sortableItems;
-  }, [filteredNodes, sortConfig, selectedPoint.capacities]);
+  }, [filteredNodes, sortConfig, selectedPoint.capacities, selectedPoint.activeStatus]);
   
   // Handle select/deselect all
   const handleSelectAll = () => {
@@ -221,11 +372,18 @@ const DetailsPanel = ({ selectedPoint, nodeColors, onClose, setSelectedNodes }) 
     });
   };
   
-  // Render sort indicator arrow
+  // Render sort indicator arrow with active highlight for current sort
   const getSortDirectionArrow = (key) => {
+    // Don't show active highlight for default sorting
+    if (sortConfig.key === 'default') {
+      return <span className="text-slate-300 ml-1">↕</span>;
+    }
+    
     if (sortConfig.key !== key) {
       return <span className="text-slate-300 ml-1">↕</span>;
     }
+    
+    // When this column is the active sort, show the direction arrow in blue
     return sortConfig.direction === 'ascending' ? 
       <span className="text-blue-500 ml-1">↑</span> : 
       <span className="text-blue-500 ml-1">↓</span>;
@@ -235,126 +393,180 @@ const DetailsPanel = ({ selectedPoint, nodeColors, onClose, setSelectedNodes }) 
     <Resizable
       width={dimensions.width}
       height={dimensions.height}
-      minConstraints={[350, 400]}
-      maxConstraints={[800, 700]}
+      minConstraints={[380, 400]}
+      maxConstraints={[700, 700]}
       onResize={onResize}
       handle={<div className="react-resizable-handle react-resizable-handle-se cursor-se-resize" />}
     >
       <div
         ref={panelRef}
-        className="bg-white z-40 flex flex-col rounded-lg shadow-lg border border-slate-200 select-none"
+        className="bg-white z-40 flex flex-col rounded-md shadow-lg border border-slate-200 select-none"
         style={{
           width: `${dimensions.width}px`,
           height: `${dimensions.height}px`,
-          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -5px rgba(0, 0, 0, 0.06)',
           position: 'fixed',
           overflow: 'hidden'
         }}
       >
+        {/* Header - Reduced padding and font size */}
         <div className="py-3 px-4 border-b border-slate-200 flex justify-between items-center bg-blue-50">
           <div className="flex items-center">
             <div className="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
-            <h3 className="font-medium text-slate-700">
+            <h3 className="font-medium text-base text-slate-700">
               Node Details for {selectedPoint.formattedLabel}
             </h3>
           </div>
           <div className="flex items-center">
-            <div className="text-xs text-slate-500 mr-3">Resize from corner</div>
+            {/* <div className="text-xs text-slate-400 mr-3">Resize ↘</div> */}
             <button 
               onClick={onClose}
-              className="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-100 rounded close-button"
+              className="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-100 rounded-full"
             >
-              <X size={18} />
+              <X size={16} />
             </button>
           </div>
         </div>
         
-        <div className="p-4 border-b border-slate-200">
-          <div className="flex items-center space-x-2 bg-slate-50 rounded-lg px-3 py-2">
-            <Search size={16} className="text-slate-400" />
+        {/* Search - More compact */}
+        <div className="p-3 border-b border-slate-200 bg-white">
+          <div className="flex items-center space-x-2 bg-slate-50 rounded-md px-3 py-1.5">
+            <Search size={14} className="text-slate-400" />
             <input
               type="text"
               placeholder="Search nodes..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-transparent border-none text-sm focus:outline-none"
+              className="w-full bg-transparent border-none text-xs focus:outline-none"
             />
           </div>
         </div>
         
-        <div className="flex-1 overflow-y-auto p-3">
-          {/* Table Header with Sortable Columns */}
-          <div className="flex items-center space-x-3 p-2 border-b border-slate-100 mb-2 font-medium text-sm text-slate-500">
-            <div className="w-4"></div>
+        {/* Table - More compact with smaller text and modified margins */}
+        <div className="flex-1 overflow-y-auto px-3 py-2">
+          {/* Table Header - Smaller text and reduced padding */}
+          <div className="flex items-center p-2 border-b border-slate-100 mb-2 font-medium text-xs text-slate-500">
+            <div className="w-6"></div>
             <button 
               onClick={() => requestSort('dataKey')}
-              className={`flex items-center flex-1 text-left hover:text-slate-800 ${sortConfig.key === 'dataKey' ? 'text-slate-800' : ''}`}
+              className={`flex items-center w-2/5 text-left hover:text-slate-800 ${sortConfig.key === 'dataKey' ? 'text-slate-800' : ''}`}
             >
               Node {getSortDirectionArrow('dataKey')}
             </button>
             <button 
               onClick={() => requestSort('value')}
-              className={`flex items-center w-20 text-right justify-end hover:text-slate-800 ${sortConfig.key === 'value' ? 'text-slate-800' : ''}`}
+              className={`flex items-center w-1/5 text-right justify-end hover:text-slate-800 ${sortConfig.key === 'value' ? 'text-slate-800' : ''}`}
             >
-              Utilization {getSortDirectionArrow('value')}
+              Usage {getSortDirectionArrow('value')}
             </button>
             <button 
               onClick={() => requestSort('capacity')}
-              className={`flex items-center w-20 text-right justify-end hover:text-slate-800 ${sortConfig.key === 'capacity' ? 'text-slate-800' : ''}`}
+              className={`flex items-center w-1/5 text-right justify-end hover:text-slate-800 ${sortConfig.key === 'capacity' ? 'text-slate-800' : ''}`}
             >
               Capacity {getSortDirectionArrow('capacity')}
             </button>
+            <button 
+              onClick={() => requestSort('active')}
+              className={`flex items-center w-1/5 text-center justify-center hover:text-slate-800 ${sortConfig.key === 'active' ? 'text-slate-800' : ''}`}
+            >
+              Status {getSortDirectionArrow('active')}
+            </button>
           </div>
           
+          {/* Sort indicator to show default sorting is active */}
+          {sortConfig.key === 'default' && (
+            <div className="text-xs text-slate-400 italic px-2 pb-2">
+              Sorted by: Active status, then by usage
+            </div>
+          )}
+          
           {sortedNodes.length === 0 && (
-            <div className="text-center p-4 text-slate-500">
+            <div className="text-center p-4 text-xs text-slate-500">
               No nodes match your search query
             </div>
           )}
-          {sortedNodes.map((item, index) => {
-            const nodeName = item.dataKey;
-            const capacityValue = selectedPoint.capacities?.[nodeName] || 0;
-            
-            return (
-              <div 
-                key={index}
-                className="flex items-center space-x-3 p-2 hover:bg-slate-50 rounded-md transition-colors mb-1"
-              >
+
+          <div className="space-y-1">
+            {sortedNodes.map((item, index) => {
+              const nodeName = item.dataKey;
+              const capacityValue = selectedPoint.capacities?.[nodeName] || 0;
+              const isActive = selectedPoint.activeStatus?.[nodeName] ?? true;
+              
+              return (
                 <div 
-                  className="w-4 h-4 rounded-full" 
-                  style={{ backgroundColor: nodeColors[nodeName] }}
-                />
-                <span className="text-sm text-slate-600 truncate flex-1">
-                  {nodeName.replace('node_', 'Node ')}
-                </span>
-                <span className="text-sm font-medium text-purple-600 w-20 text-right">
-                  {item.value.toFixed(2)} GB
-                </span>
-                <span className="text-sm font-medium text-red-600 w-20 text-right">
-                  {capacityValue.toFixed(2)} GB
-                </span>
-              </div>
-            );
-          })}
+                  key={index}
+                  className={`flex items-center py-1.5 px-2 hover:bg-slate-50 rounded transition-colors ${!isActive ? 'bg-slate-50' : ''}`}
+                >
+                  {/* Node color indicator - compact size */}
+                  <div 
+                    className="w-4 h-4 rounded-full flex items-center justify-center"
+                    style={{ 
+                      backgroundColor: isActive ? nodeColors[nodeName] : '#94a3b8',
+                      opacity: isActive ? 0.9 : 0.7,
+                      boxShadow: isActive ? 'none' : 'inset 0 0 0 1px ' + nodeColors[nodeName]
+                    }}
+                  >
+                    {!isActive && (
+                      <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                    )}
+                  </div>
+
+                  {/* Node name - smaller text */}
+                  <span 
+                    className={`text-xs truncate ml-2 w-2/5 ${isActive ? 'text-slate-700 font-medium' : 'text-slate-400'}`}
+                  >
+                    {nodeName.replace('node_', 'Node ')}
+                  </span>
+                  
+                  {/* Utilization - smaller numbers */}
+                  <span 
+                    className={`text-xs font-medium w-1/5 text-right ${isActive ? 'text-purple-600' : 'text-purple-400'}`}
+                  >
+                    {item.value.toFixed(1)} GB
+                  </span>
+                  
+                  {/* Capacity - smaller numbers */}
+                  <span 
+                    className={`text-xs font-medium w-1/5 text-right ${isActive ? 'text-red-600' : 'text-red-400'}`}
+                  >
+                    {capacityValue.toFixed(1)} GB
+                  </span>
+                  
+                  {/* Active status - smaller badges */}
+                  <div className="w-1/5 flex justify-center">
+                    {isActive ? (
+                      <span className="px-1.5 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded">
+                        Active
+                      </span>
+                    ) : (
+                      <span className="px-1.5 py-0.5 bg-slate-200 text-slate-600 text-xs font-medium rounded">
+                        Off
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
         
-        {/* Summary footer */}
-        <div className="p-4 border-t border-slate-200 bg-slate-50">
-          <div className="grid grid-cols-2 gap-4">
+        {/* Summary footer - More compact */}
+        <div className="p-3 border-t border-slate-200 bg-slate-50">
+          <div className="grid grid-cols-2 gap-3">
             {selectedPoint.totalUtilization !== undefined && (
-              <div className="bg-white p-3 rounded-lg shadow-sm">
-                <div className="text-xs text-slate-500">Total Utilization</div>
-                <div className="text-lg font-medium text-purple-600">
-                  {selectedPoint.totalUtilization.toFixed(2)} GB
+              <div className="bg-white p-3 rounded shadow-sm border border-slate-100">
+                <div className="text-xs text-slate-500 mb-0.5">Total Usage</div>
+                <div className="text-base font-medium text-purple-600">
+                  {selectedPoint.totalUtilization.toFixed(1)} GB
                 </div>
               </div>
             )}
             
             {selectedPoint.totalCapacity !== undefined && (
-              <div className="bg-white p-3 rounded-lg shadow-sm">
-                <div className="text-xs text-slate-500">Total Capacity</div>
-                <div className="text-lg font-medium text-red-600">
-                  {selectedPoint.totalCapacity.toFixed(2)} GB
+              <div className="bg-white p-3 rounded shadow-sm border border-slate-100">
+                <div className="text-xs text-slate-500 mb-0.5">Total Capacity</div>
+                <div className="text-base font-medium text-red-600">
+                  {selectedPoint.totalCapacity.toFixed(1)} GB
                 </div>
               </div>
             )}
@@ -365,6 +577,7 @@ const DetailsPanel = ({ selectedPoint, nodeColors, onClose, setSelectedNodes }) 
   );
 };
 
+// Update the TimeSeriesUtilizationCard component to handle the is_active flag
 const TimeSeriesUtilizationCard = ({ data }) => {
   const [selectedPeriod, setSelectedPeriod] = useState(TIME_PERIODS.HOUR);
   const [filteredData, setFilteredData] = useState([]);
@@ -424,11 +637,14 @@ const TimeSeriesUtilizationCard = ({ data }) => {
           if (!nodeData[nodeName][periodKey]) {
             nodeData[nodeName][periodKey] = {
               used: [],
-              total: []
+              total: [],
+              active: []
             };
           }
           nodeData[nodeName][periodKey].used.push(point.memory_used);
           nodeData[nodeName][periodKey].total.push(point.memory_total);
+          // Store the is_active status from the API response
+          nodeData[nodeName][periodKey].active.push(point.is_active !== undefined ? point.is_active : true);
         }
       });
     });
@@ -445,12 +661,15 @@ const TimeSeriesUtilizationCard = ({ data }) => {
       let selectedCapacity = 0;
 
       Object.entries(nodeData).forEach(([nodeName, periodData]) => {
-        const values = periodData[timestamp] || { used: [], total: [] };
+        const values = periodData[timestamp] || { used: [], total: [], active: [] };
         if (values.used.length > 0) {
           const usedValue = _.mean(values.used);
           const totalValue = _.mean(values.total);
+          const isActive = values.active.length > 0 ? values.active[values.active.length - 1] : true;
+          
           dataPoint[nodeName] = usedValue;
           dataPoint[`${nodeName}_total`] = totalValue;
+          dataPoint[`${nodeName}_is_active`] = isActive;
 
           // Only add to totals if node is selected
           if (selectedNodes[nodeName]) {
@@ -486,10 +705,17 @@ const TimeSeriesUtilizationCard = ({ data }) => {
     if (isNaN(date.getTime())) {
       return timestamp;
     }
-
+  
     switch (selectedPeriod.value) {
       case 'hour':
-        return `${date.getHours().toString().padStart(2, '0')}:00`;
+        // Option 1: Use browser's local timezone (for Riyadh/KSA users)
+        const year = date.getFullYear();
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const day = date.getDate().toString().padStart(2, '0');
+        const hours = date.getHours().toString().padStart(2, '0');
+        
+        return `${year}-${month}-${day}T${hours}`;
+        
       case 'day':
         return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
       case 'week':
@@ -668,6 +894,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                     const nodesWithValues = Object.entries(pointData)
                       .filter(([key, value]) => 
                         !key.includes('_total') && 
+                        !key.includes('_is_active') &&
                         key !== 'timestamp' && 
                         key !== 'total_utilization' && 
                         key !== 'total_capacity' &&
@@ -690,11 +917,23 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                         capacities[nodeName] = value;
                       });
                     
+                    // Collect active status for each node
+                    const activeStatus = {};
+                    Object.entries(pointData)
+                      .filter(([key]) => 
+                        key.includes('_is_active')
+                      )
+                      .forEach(([key, value]) => {
+                        const nodeName = key.replace('_is_active', '');
+                        activeStatus[nodeName] = value;
+                      });
+                    
                     setSelectedPoint({
                       label: pointData.timestamp,
                       formattedLabel: formatTimeLabel(pointData.timestamp),
                       nodes: nodesWithValues,
                       capacities: capacities,
+                      activeStatus: activeStatus,
                       totalUtilization: pointData.total_utilization,
                       totalCapacity: pointData.total_capacity
                     });
@@ -815,8 +1054,6 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                   padding={{ top: 10 }}
                   tick={{ fontSize: 10, fill: '#44748b' }}
                   gap={10}
-                  x={225}
-                  width={500}
                 />
               </LineChart>
           </ResponsiveContainer>
