@@ -165,76 +165,80 @@ def get_gpu_time_series_data(period='hour', start_time=None, end_time=None):
         'month': TruncMonth
     }    
     
-    nodes = Node.objects.all().distinct()
+    # Fetch all nodes in a single query
+    nodes = list(Node.objects.all().distinct())
+    
+    # Fetch all node memory totals in a single query
     node_memory_totals = {
         node_data['node']: node_data['total'] or 0
         for node_data in GPU.objects.values('node').annotate(total=Sum('memory_total'))
     }
+    
+    # Fetch all GPU usage data for all nodes in a single query
+    all_node_data = (
+        GPUUsage.timescale.filter(
+            gpu__node__in=nodes,
+            time__range=(start_time, end_time),
+        )
+        .values("gpu__node", "time")
+        .annotate(total_memory_used=Sum("memory_used"))
+        .annotate(truncated_time=trunc_function[period]("time"))
+        .order_by("gpu__node", "time")
+    )
+    
+    # Group the data by node
+    data_by_node = defaultdict(list)
+    for entry in all_node_data:
+        node_id = entry['gpu__node']
+        data_by_node[node_id].append({
+            'truncated_time': entry['truncated_time'],
+            'total_memory_used': entry['total_memory_used']
+        })
     
     # Function to truncate timestamps to the appropriate precision
     truncate_timestamp = lambda ts: ts.replace(minute=0, second=0, microsecond=0) # noqa: E731
     
     nodes_timeseries = []
     
+    # Calculate the time increment based on the period
+    time_increments = {
+        'hour': timedelta(hours=1),
+        'day': timedelta(days=1),
+        'week': timedelta(weeks=1),
+        'month': timedelta(days=30)  # Approximate month increment
+    }
+    time_increment = time_increments[period]
+    
+    # Process data for each node
     for node in nodes:
-        node_memory_total = node_memory_totals.get(node.id, 0)   
-        raw_node_data = (
-            GPUUsage.timescale.filter(
-                gpu__node=node,
-                time__range=(start_time, end_time),
-            )
-            .values("time")
-            .annotate(total_memory_used=Sum("memory_used"))
-            .annotate(truncated_time=trunc_function[period]("time"))
-            .order_by("time")
-        )  
-         
+        node_memory_total = node_memory_totals.get(node.id, 0)
+        node_data = data_by_node.get(node.id, [])
+        
+        # Group by time bucket and calculate averages
         time_buckets = defaultdict(list)
-        for entry in raw_node_data:
+        for entry in node_data:
             bucket_time = entry['truncated_time']
             time_buckets[bucket_time].append(entry['total_memory_used'])
-
-        node_data = []
-        for bucket_time, values in time_buckets.items():
-            avg_memory_used = sum(values) / len(values) if values else 0
-            node_data.append({
-                'bucket': bucket_time,
-                'memory_used': avg_memory_used
-            })
-
-        timeseries = []        
-        data_by_truncated_bucket = []
-        for data_point in node_data:
-            bucket = data_point['bucket']
-            data_by_truncated_bucket.append(bucket)
-            
-            timeseries.append({
-                'timestamp': bucket.isoformat(),
-                'memory_total': float(node_memory_total/1024),  # Convert to GB
-                'memory_used': float(data_point['memory_used'] or 0) / 1024,  # Convert to GB
-                'is_active': True
-            })
         
-        # Generate missing time buckets
+        processed_data = {
+            bucket_time: (sum(values) / len(values) if values else 0)
+            for bucket_time, values in time_buckets.items()
+        }
+        
+        # Generate complete time series with missing buckets filled in
+        timeseries = []
         current_bucket = truncate_timestamp(start_time)
         end_truncated = truncate_timestamp(end_time)
         
         while current_bucket <= end_truncated:
-            if current_bucket not in data_by_truncated_bucket:                    
-                timeseries.append({
-                    'timestamp': current_bucket.isoformat(),
-                    'memory_total': float(node_memory_total/1024),  # Convert to GB
-                    'memory_used': 0.0,
-                    'is_active': False
-                })
-            if period == 'hour':
-                current_bucket += timedelta(hours=1)
-            elif period == 'day':
-                current_bucket += timedelta(days=1)
-            elif period == 'week':
-                current_bucket += timedelta(weeks=1)
-            elif period == 'month':
-                current_bucket += timedelta(days=30)  # Approximate month increment
+            memory_used = processed_data.get(current_bucket, 0.0)
+            timeseries.append({
+                'timestamp': current_bucket.isoformat(),
+                'memory_total': float(node_memory_total/1024),  # Convert to GB
+                'memory_used': float(memory_used or 0) / 1024,  # Convert to GB
+                'is_active': current_bucket in processed_data
+            })
+            current_bucket += time_increment
             
         timeseries.sort(key=lambda x: x['timestamp'])
         nodes_timeseries.append({
@@ -242,7 +246,7 @@ def get_gpu_time_series_data(period='hour', start_time=None, end_time=None):
         })
     
     # Calculate summary statistics
-    total_nodes = nodes.count()
+    total_nodes = len(nodes)
     total_gpus = GPU.objects.all().distinct().count()
     total_capacity = sum(node_memory_totals.values())
     
