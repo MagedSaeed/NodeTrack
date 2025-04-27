@@ -1,3 +1,5 @@
+// In TimeSeriesUtilizationCard.jsx
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Card } from '../../../../shared_ui/Card';
 import { 
@@ -34,6 +36,9 @@ const TimeSeriesUtilizationCard = ({ data }) => {
   const [detailsVisible, setDetailsVisible] = useState(false);
   const [selectedPoint, setSelectedPoint] = useState(null);
   
+  // New state for handling brush selection
+  const [visibleDataRange, setVisibleDataRange] = useState(null);
+  
   const chartRef = useRef(null);
 
   // Format time label with the current period
@@ -65,10 +70,40 @@ const TimeSeriesUtilizationCard = ({ data }) => {
     const processedData = processTimeSeriesData(data, selectedPeriod, selectedNodes);
     setFilteredData(processedData);
     
-    // Reset details view when data changes
+    // Reset details view and brush range when data changes
     setDetailsVisible(false);
     setSelectedPoint(null);
+    setVisibleDataRange(null);
   }, [selectedPeriod, data, selectedNodes]);
+
+  // Handle brush change to update visible data range
+  const handleBrushChange = (brushArea) => {
+    if (brushArea && brushArea.startIndex !== undefined && brushArea.endIndex !== undefined) {
+      setVisibleDataRange({
+        startIndex: brushArea.startIndex,
+        endIndex: brushArea.endIndex
+      });
+    } else {
+      setVisibleDataRange(null); // Reset when brush is cleared
+    }
+  };
+
+  // Dynamic interval calculation for X-axis based on visible range
+  const calculateXAxisInterval = (data) => {
+    if (!data || !data.length) return 'preserveStartEnd';
+    
+    // Determine how many points are visible
+    const visibleCount = visibleDataRange
+      ? visibleDataRange.endIndex - visibleDataRange.startIndex + 1
+      : data.length;
+    
+    // Adjust interval based on visible count
+    if (visibleCount <= 6) return 0; // Show all ticks when few points
+    if (visibleCount <= 12) return 1; // Show every other tick
+    if (visibleCount <= 24) return 2; // Show every third tick
+    if (visibleCount <= 48) return 3; // Show every fourth tick
+    return Math.floor(visibleCount / 12); // Aim for about 12 ticks max
+  };
 
   // Close details panel
   const handleCloseDetails = () => {
@@ -103,7 +138,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
           </div>
           
           <div className="flex items-center space-x-4">
-            {/* Modified Node Selection Dropdown */}
+            {/* Node Selection Dropdown */}
             <div className="relative node-dropdown-container">
               <button
                 onClick={() => setIsNodeDropdownOpen(!isNodeDropdownOpen)}
@@ -249,7 +284,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                   tick={{ fill: '#64748b', fontSize: 12 }}
                   angle={-45}
                   textAnchor="end"
-                  interval="preserveStartEnd"
+                  interval={(data) => calculateXAxisInterval(data)}
                   tickFormatter={formatTimeLabel}
                   height={60}
                   padding={{ left: 10, right: 10 }}
@@ -355,6 +390,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                   padding={{ top: 10 }}
                   tick={{ fontSize: 10, fill: '#44748b' }}
                   gap={10}
+                  onChange={handleBrushChange}
                 />
               </LineChart>
           </ResponsiveContainer>
