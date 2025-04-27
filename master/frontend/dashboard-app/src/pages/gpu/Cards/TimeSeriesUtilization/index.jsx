@@ -36,7 +36,6 @@ const TimeSeriesUtilizationCard = ({ data }) => {
   const [detailsVisible, setDetailsVisible] = useState(false);
   const [selectedPoint, setSelectedPoint] = useState(null);
   
-  // New state for handling brush selection
   const [visibleDataRange, setVisibleDataRange] = useState(null);
   
   const chartRef = useRef(null);
@@ -70,21 +69,19 @@ const TimeSeriesUtilizationCard = ({ data }) => {
     const processedData = processTimeSeriesData(data, selectedPeriod, selectedNodes);
     setFilteredData(processedData);
     
-    // Reset details view and brush range when data changes
+    // Reset details view when data changes
     setDetailsVisible(false);
     setSelectedPoint(null);
-    setVisibleDataRange(null);
+    
   }, [selectedPeriod, data, selectedNodes]);
 
-  // Handle brush change to update visible data range
+  // Simple brush change handler
   const handleBrushChange = (brushArea) => {
     if (brushArea && brushArea.startIndex !== undefined && brushArea.endIndex !== undefined) {
       setVisibleDataRange({
         startIndex: brushArea.startIndex,
         endIndex: brushArea.endIndex
       });
-    } else {
-      setVisibleDataRange(null); // Reset when brush is cleared
     }
   };
 
@@ -261,7 +258,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
           <ResponsiveContainer width="100%" height="100%">
             <LineChart 
                 data={filteredData}
-                margin={{ top: 10, right: 50, left: 60, bottom: 100 }}
+                margin={{ top: 10, right: 25, left: 25, bottom: 90 }} // Increased right margin
                 onClick={(data) => {
                   // Ensure we have valid click data with an active payload
                   if (data && data.activePayload && data.activePayload.length > 0) {
@@ -287,7 +284,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                   interval={(data) => calculateXAxisInterval(data)}
                   tickFormatter={formatTimeLabel}
                   height={60}
-                  padding={{ left: 10, right: 10 }}
+                  padding={{ left: 10, right: 10 }} // Increased padding on both sides
                 />
                 <YAxis 
                   tick={{ fill: '#64748b', fontSize: 12 }}
@@ -379,18 +376,34 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                   />
                 )}
                 
+                {/* Fixed Brush Component with reduced width */}
                 <Brush 
                   dataKey="timestamp"
-                  height={30}
+                  height={20} 
                   stroke="#94a3b8"
-                  tickFormatter={formatTimeLabel}
-                  y={300}
-                  travellerWidth={10}
                   fill="#f8fafc"
-                  padding={{ top: 10 }}
-                  tick={{ fontSize: 10, fill: '#44748b' }}
-                  gap={10}
+                  // tickFormatter={formatTimeLabel}
+                  tickFormatter={() => ''}
+                  y={325}
+                  travellerWidth={10}
+                  padding={{ top: 5, bottom: 5 }}
+                  tickGap={10}
                   onChange={handleBrushChange}
+                  tick={{ fontSize: 10, fill: '#64748b' }}
+                  alwaysShowText={false}
+                  // Reduce width to show right label
+                  width="75%"
+                  // Styling
+                  strokeOpacity={0.8}
+                  fillOpacity={0.1}
+                  traveller={{
+                    fill: '#f1f5f9',
+                    stroke: '#64748b',
+                    strokeWidth: 1,
+                    width: 10,
+                    height: 10,
+                    r: 1
+                  }}
                 />
               </LineChart>
           </ResponsiveContainer>
@@ -406,11 +419,16 @@ const TimeSeriesUtilizationCard = ({ data }) => {
           )}
         </div>
 
-        {data.date_range && (
-          <div className="mt-6 text-sm text-slate-500 text-center">
+        {/* Instructions text for brush usage */}
+        <div className="text-xs text-slate-500 text-center">
+          Drag the handles to adjust the visible time range
+        </div>
+
+        {/* {data.date_range && (
+          <div className="mt-4 text-sm text-slate-500 text-center">
             Data Range: {data.date_range.start} - {data.date_range.end}
           </div>
-        )}
+        )} */}
       </div>
     </Card>
   );
