@@ -5,6 +5,7 @@ from rest_framework.decorators import api_view, permission_classes
 from datetime import datetime, timedelta
 from ipware.ip import get_client_ip
 from django.utils import timezone  # Import timezone module
+from collections import defaultdict
 
 from core.models import Node
 from core.permissions import HasAPIToken
@@ -158,23 +159,9 @@ def generate_gpu_report(request):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 def get_gpu_time_series_data(usage_data, period='hour', start_time=None, end_time=None, grace_period_minutes=15):
-    # Convert period to TimescaleDB time_bucket interval format
-    period_map = {
-        'hour': '1 hour',
-        'day': '1 day',
-        'week': '1 week',
-        'month': '1 month'
-    }
-    bucket_interval = period_map[period]
-    
+
     # Define grace period based on the parameter
     grace_period = timedelta(minutes=grace_period_minutes)
-    
-    # Ensure start_time and end_time are timezone aware
-    if start_time and timezone.is_naive(start_time):
-        start_time = timezone.make_aware(start_time)
-    if end_time and timezone.is_naive(end_time):
-        end_time = timezone.make_aware(end_time)
         
     # Get all nodes - not just nodes with usage data
     nodes = Node.objects.all().distinct()
@@ -183,21 +170,7 @@ def get_gpu_time_series_data(usage_data, period='hour', start_time=None, end_tim
     memory_total = GPU.objects.all().distinct().aggregate(total=Sum('memory_total'))['total'] or 0
     
     # Function to truncate timestamps to the appropriate precision
-    def truncate_timestamp(ts):
-        return ts.replace(minute=0, second=0, microsecond=0)
-        # if period == 'hour':
-        #     return ts.replace(minute=0, second=0, microsecond=0)
-        # elif period == 'day':
-        #     return ts.replace(hour=0, minute=0, second=0, microsecond=0)
-        # elif period == 'week':
-        #     # For weekly, truncate to the start of the week (assuming Monday is the first day)
-        #     days_since_monday = ts.weekday()
-        #     return (ts - timedelta(days=days_since_monday)).replace(
-        #         hour=0, minute=0, second=0, microsecond=0)
-        # elif period == 'month':
-        #     # For monthly, truncate to the first day of the month
-        #     return ts.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        # return ts
+    truncate_timestamp = lambda ts: ts.replace(minute=0, second=0, microsecond=0) # noqa: E731
     
     # Get time series data per node
     nodes_timeseries = []
@@ -218,7 +191,7 @@ def get_gpu_time_series_data(usage_data, period='hour', start_time=None, end_tim
         ).order_by('time')
 
         # Now process in Python to bucket by time
-        from collections import defaultdict
+        
         time_buckets = defaultdict(list)
 
         for entry in raw_node_data:
