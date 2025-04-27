@@ -181,7 +181,6 @@ class WindowsGPUCollector(GPUCollector):
                     usage_data.append(entry)
                 return usage_data
             # Process GPU usage information
-            print(gpus)
             for entry in memory_data:
                 instance_name = entry['InstanceName']
                 memory_used = entry['CookedValue'] / (1024 * 1024)  # Convert to MB
@@ -195,7 +194,6 @@ class WindowsGPUCollector(GPUCollector):
                 process_info = self._get_process_owner(pid)
 
                 # Get GPU name (match by index)
-                gpu_name = "Unknown"
                 if gpu_id < len(gpus):
                     gpu_name = gpus[gpu_id].get("Name", "Unknown")
 
