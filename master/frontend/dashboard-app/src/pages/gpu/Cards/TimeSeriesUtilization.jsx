@@ -674,7 +674,8 @@ const TimeSeriesUtilizationCard = ({ data }) => {
           // Only add to totals if node is selected
           if (selectedNodes[nodeName]) {
             selectedUtilization += usedValue;
-            selectedCapacity += totalValue;
+            // selectedCapacity += totalValue;
+            selectedCapacity = data.summary.total_capacity_gb; // Use the total capacity from the API response
           }
         }
       });
