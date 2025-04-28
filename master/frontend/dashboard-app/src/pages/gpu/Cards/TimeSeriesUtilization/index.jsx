@@ -28,8 +28,8 @@ const TimeSeriesUtilizationCard = ({ data }) => {
   const [filteredData, setFilteredData] = useState([]);
   const [isNodeDropdownOpen, setIsNodeDropdownOpen] = useState(false);
   const [selectedNodes, setSelectedNodes] = useState({});
-  const [showTotalUtilization, setShowTotalUtilization] = useState(true);
-  const [showTotalCapacity, setShowTotalCapacity] = useState(true);
+  const [showTotalUtilization, setShowTotalUtilization] = useState(false);
+  const [showTotalCapacity, setShowTotalCapacity] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
   // State for detailed view
@@ -107,6 +107,13 @@ const TimeSeriesUtilizationCard = ({ data }) => {
     setDetailsVisible(false);
     setSelectedPoint(null);
   };
+  
+  // Create a key for the LineChart that changes when checkbox states change
+  // This will force the chart to re-render with animation when checkboxes are toggled
+  const chartKey = useMemo(() => 
+    `chart-${showTotalUtilization}-${showTotalCapacity}`, 
+    [showTotalUtilization, showTotalCapacity]
+  );
 
   // Handle outside click for dropdown
   useEffect(() => {
@@ -237,7 +244,10 @@ const TimeSeriesUtilizationCard = ({ data }) => {
             <input
               type="checkbox"
               checked={showTotalUtilization}
-              onChange={() => setShowTotalUtilization(!showTotalUtilization)}
+              onChange={() => {
+                setShowTotalUtilization(!showTotalUtilization);
+                // Force re-render of all lines by changing chartKey
+              }}
               className="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
             />
             <span className="text-sm text-slate-600">Selected Nodes Total Utilization</span>
@@ -246,7 +256,10 @@ const TimeSeriesUtilizationCard = ({ data }) => {
             <input
               type="checkbox"
               checked={showTotalCapacity}
-              onChange={() => setShowTotalCapacity(!showTotalCapacity)}
+              onChange={() => {
+                setShowTotalCapacity(!showTotalCapacity);
+                // Force re-render of all lines by changing chartKey
+              }}
               className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
             />
             <span className="text-sm text-slate-600">Selected Nodes Total Capacity</span>
@@ -257,6 +270,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
         <div className="h-96 relative" ref={chartRef}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart 
+                key={chartKey}
                 data={filteredData}
                 margin={{ top: 10, right: 25, left: 25, bottom: 90 }} // Increased right margin
                 onClick={(data) => {
@@ -317,7 +331,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                   }}
                 />
     
-                {/* Individual node lines */}
+                {/* Individual node lines with animation */}
                 {Object.entries(nodeColors).map(([nodeKey, color]) => (
                   selectedNodes[nodeKey] && (
                     <Line 
@@ -334,6 +348,9 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                         strokeWidth: 1, 
                         fill: 'white'
                       }}
+                      isAnimationActive={true}
+                      animationDuration={1500}
+                      animationEasing="ease-in-out"
                     />
                   )
                 ))}
@@ -354,6 +371,9 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                       strokeWidth: 2, 
                       fill: 'white'
                     }}
+                    isAnimationActive={true}
+                    animationDuration={1500}
+                    animationEasing="ease-in-out"
                   />
                 )}
     
@@ -373,6 +393,9 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                       strokeWidth: 2, 
                       fill: 'white'
                     }}
+                    isAnimationActive={true}
+                    animationDuration={1500}
+                    animationEasing="ease-in-out"
                   />
                 )}
                 
