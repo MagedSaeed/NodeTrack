@@ -240,7 +240,7 @@ const DetailsPanel = ({ selectedPoint, nodeColors, onClose, setSelectedNodes, sh
               onClick={() => requestSort('dataKey')}
               className={`flex items-center w-1/6 text-left hover:text-slate-800 ${sortConfig.key === 'dataKey' ? 'text-slate-800' : ''}`}
             >
-              {getSortDirectionArrow('dataKey')}
+              Node {getSortDirectionArrow('dataKey')}
             </button>
             
             <Divider />
@@ -323,7 +323,7 @@ const DetailsPanel = ({ selectedPoint, nodeColors, onClose, setSelectedNodes, sh
                   <span 
                     className={`text-xs truncate ml-2 w-1/6 ${isActive ? 'text-slate-700 font-medium' : 'text-slate-400'}`}
                   >
-                    {nodeName.replace('node_', 'Node ')}
+                    {nodeName.replace('node_', '')}
                   </span>
                   
                   <Divider />
