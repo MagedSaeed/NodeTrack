@@ -240,7 +240,7 @@ const DetailsPanel = ({ selectedPoint, nodeColors, onClose, setSelectedNodes, sh
               onClick={() => requestSort('dataKey')}
               className={`flex items-center w-1/6 text-left hover:text-slate-800 ${sortConfig.key === 'dataKey' ? 'text-slate-800' : ''}`}
             >
-              Node {getSortDirectionArrow('dataKey')}
+              {getSortDirectionArrow('dataKey')}
             </button>
             
             <Divider />
