@@ -28,8 +28,10 @@ const TimeSeriesUtilizationCard = ({ data }) => {
   const [filteredData, setFilteredData] = useState([]);
   const [isNodeDropdownOpen, setIsNodeDropdownOpen] = useState(false);
   const [selectedNodes, setSelectedNodes] = useState({});
+  // Set both checkboxes to false by default
   const [showTotalUtilization, setShowTotalUtilization] = useState(false);
   const [showTotalCapacity, setShowTotalCapacity] = useState(false);
+  const [showAsPercentage, setShowAsPercentage] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
   // State for detailed view
@@ -94,12 +96,16 @@ const TimeSeriesUtilizationCard = ({ data }) => {
       ? visibleDataRange.endIndex - visibleDataRange.startIndex + 1
       : data.length;
     
-    // Adjust interval based on visible count
-    if (visibleCount <= 6) return 0; // Show all ticks when few points
-    if (visibleCount <= 12) return 1; // Show every other tick
-    if (visibleCount <= 24) return 2; // Show every third tick
-    if (visibleCount <= 48) return 3; // Show every fourth tick
-    return Math.floor(visibleCount / 12); // Aim for about 12 ticks max
+    // For very small ranges (like when using the brush), show every tick
+    if (visibleCount <= 20) return 0;
+    
+    // Adjust interval based on visible count for larger ranges
+    if (visibleCount <= 30) return 1; // Show every other tick
+    if (visibleCount <= 60) return 2; // Show every third tick
+    if (visibleCount <= 100) return 4; // Show every fifth tick
+    
+    // For very large datasets, dynamically calculate to show ~12-15 ticks
+    return Math.max(1, Math.floor(visibleCount / 15));
   };
 
   // Close details panel
@@ -111,8 +117,8 @@ const TimeSeriesUtilizationCard = ({ data }) => {
   // Create a key for the LineChart that changes when checkbox states change
   // This will force the chart to re-render with animation when checkboxes are toggled
   const chartKey = useMemo(() => 
-    `chart-${showTotalUtilization}-${showTotalCapacity}`, 
-    [showTotalUtilization, showTotalCapacity]
+    `chart-${showTotalUtilization}-${showTotalCapacity}-${showAsPercentage}`, 
+    [showTotalUtilization, showTotalCapacity, showAsPercentage]
   );
 
   // Handle outside click for dropdown
@@ -238,7 +244,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
           </div>
         </div>
 
-        {/* Total Utilization and Capacity Checkboxes */}
+        {/* Control Panel: Display Options */}
         <div className="mb-4 flex items-center justify-end space-x-4">
           <label className="flex items-center space-x-2">
             <input
@@ -263,6 +269,19 @@ const TimeSeriesUtilizationCard = ({ data }) => {
               className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
             />
             <span className="text-sm text-slate-600">Selected Nodes Total Capacity</span>
+          </label>
+          <div className="h-6 border-l border-slate-200 mx-2"></div>
+          <label className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={showAsPercentage}
+              onChange={() => {
+                setShowAsPercentage(!showAsPercentage);
+                // Force re-render of all lines by changing chartKey
+              }}
+              className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-sm text-slate-600">Show as Percentage</span>
           </label>
         </div>
 
@@ -296,16 +315,26 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                   angle={-45}
                   textAnchor="end"
                   interval={(data) => calculateXAxisInterval(data)}
-                  tickFormatter={formatTimeLabel}
-                  height={60}
+                  tickFormatter={(value) => {
+                    // When zoomed in with the brush, show more detailed time format
+                    if (visibleDataRange && 
+                        (visibleDataRange.endIndex - visibleDataRange.startIndex) <= 20) {
+                      const date = new Date(value);
+                      return `${date.getHours().toString().padStart(2, '0')}:00 ${date.getDate()}/${date.getMonth()+1}`;
+                    }
+                    // Otherwise use the standard formatter
+                    return formatTimeLabel(value);
+                  }}
+                  height={70} // Increased height for better label visibility
                   padding={{ left: 10, right: 10 }} // Increased padding on both sides
                 />
                 <YAxis 
                   tick={{ fill: '#64748b', fontSize: 12 }}
                   tickCount={10}
-                  domain={[0, 'auto']}
+                  domain={[0, showAsPercentage ? 100 : 'auto']}
+                  tickFormatter={(value) => showAsPercentage ? `${value}%` : value}
                   label={{ 
-                    value: 'Node Memory Usage (GB)',
+                    value: showAsPercentage ? 'Memory Utilization (%)' : 'Node Memory Usage (GB)',
                     angle: -90,
                     position: 'insideLeft',
                     style: { fill: '#64748b', fontSize: '14px', textAnchor: 'middle' },
@@ -321,6 +350,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                       nodeColors={nodeColors} 
                       selectedNodes={selectedNodes}
                       formatTimeLabel={formatTimeLabel}
+                      showAsPercentage={showAsPercentage}
                     />
                   }
                   wrapperStyle={{ zIndex: 30, pointerEvents: 'none' }}
@@ -329,11 +359,49 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                     strokeWidth: 1.5,
                     strokeDasharray: '5 5'
                   }}
+                  isAnimationActive={false}
                 />
     
                 {/* Individual node lines with animation */}
-                {Object.entries(nodeColors).map(([nodeKey, color]) => (
-                  selectedNodes[nodeKey] && (
+                {Object.entries(nodeColors).map(([nodeKey, color]) => {
+                  // Only render if node is selected
+                  if (!selectedNodes[nodeKey]) return null;
+                  
+                  // For percentage mode, we need to calculate values on the fly
+                  if (showAsPercentage) {
+                    return (
+                      <Line 
+                        key={nodeKey}
+                        type="monotone"
+                        // Use a function to calculate percentage on the fly
+                        dataKey={(dataPoint) => {
+                          const usage = dataPoint[nodeKey];
+                          const capacity = dataPoint[`${nodeKey}_total`];
+                          // Calculate percentage if both values exist
+                          if (usage !== undefined && capacity !== undefined && capacity > 0) {
+                            return (usage / capacity) * 100;
+                          }
+                          return 0; // Default to 0 if we can't calculate
+                        }}
+                        stroke={color}
+                        name={nodeKey}
+                        strokeWidth={1}
+                        dot={false}
+                        activeDot={{ 
+                          r: 4, 
+                          stroke: color, 
+                          strokeWidth: 1, 
+                          fill: 'white'
+                        }}
+                        isAnimationActive={true}
+                        animationDuration={1500}
+                        animationEasing="ease-in-out"
+                      />
+                    );
+                  }
+                  
+                  // For absolute values (GB)
+                  return (
                     <Line 
                       key={nodeKey}
                       type="monotone"
@@ -352,14 +420,27 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                       animationDuration={1500}
                       animationEasing="ease-in-out"
                     />
-                  )
-                ))}
+                  );
+                })}
     
                 {/* Total utilization line - now only for selected nodes */}
                 {showTotalUtilization && (
                   <Line
                     type="monotone"
-                    dataKey="total_utilization"
+                    dataKey={showAsPercentage ? 
+                      // For percentage mode, calculate on the fly
+                      (dataPoint) => {
+                        const usage = dataPoint.total_utilization;
+                        const capacity = dataPoint.total_capacity;
+                        // Calculate percentage if both values exist
+                        if (usage !== undefined && capacity !== undefined && capacity > 0) {
+                          return (usage / capacity) * 100;
+                        }
+                        return 0; // Default to 0 if we can't calculate
+                      } : 
+                      // For absolute mode, use the raw value
+                      "total_utilization"
+                    }
                     stroke="#9333ea"
                     name="total_utilization"
                     strokeWidth={2}
@@ -377,8 +458,8 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                   />
                 )}
     
-                {/* Total capacity line - now only for selected nodes */}
-                {showTotalCapacity && (
+                {/* Total capacity line - only show in absolute mode, not in percentage mode */}
+                {showTotalCapacity && !showAsPercentage && (
                   <Line
                     type="monotone"
                     dataKey="total_capacity"
@@ -399,45 +480,62 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                   />
                 )}
                 
+                {/* In percentage mode, add a 100% reference line */}
+                {showAsPercentage && (
+                  <Line
+                    type="monotone"
+                    dataKey={() => 100} // Constant 100% line
+                    stroke="#dc2626"
+                    name="max_capacity"
+                    strokeWidth={1.5}
+                    strokeDasharray="2 2"
+                    dot={false}
+                    isAnimationActive={false}
+                  />
+                )}
+                
                 {/* Fixed Brush Component with reduced width */}
                 <Brush 
                   dataKey="timestamp"
                   height={20} 
                   stroke="#94a3b8"
                   fill="#f8fafc"
-                  // tickFormatter={formatTimeLabel}
-                  tickFormatter={() => ''}
+                  tickFormatter={(value) => {
+                    const date = new Date(value);
+                    return `${date.getMonth()+1}/${date.getDate()}`;
+                  }}
                   y={325}
                   travellerWidth={10}
                   padding={{ top: 5, bottom: 5 }}
                   tickGap={10}
                   onChange={handleBrushChange}
                   tick={{ fontSize: 10, fill: '#64748b' }}
-                  alwaysShowText={false}
+                  alwaysShowText={true}
                   // Reduce width to show right label
-                  width="75%"
+                  width="80%"
                   // Styling
                   strokeOpacity={0.8}
-                  fillOpacity={0.1}
+                  fillOpacity={0.2}
                   traveller={{
                     fill: '#f1f5f9',
                     stroke: '#64748b',
-                    strokeWidth: 1,
-                    width: 10,
-                    height: 10,
-                    r: 1
+                    strokeWidth: 1.5,
+                    width: 12,
+                    height: 20,
+                    r: 2
                   }}
                 />
               </LineChart>
           </ResponsiveContainer>
           
           {/* Render the details panel */}
-          {detailsVisible && selectedPoint && (
+                          {detailsVisible && selectedPoint && (
             <DetailsPanel 
               selectedPoint={selectedPoint}
               nodeColors={nodeColors}
               onClose={handleCloseDetails}
               setSelectedNodes={setSelectedNodes}
+              showAsPercentage={showAsPercentage}
             />
           )}
         </div>

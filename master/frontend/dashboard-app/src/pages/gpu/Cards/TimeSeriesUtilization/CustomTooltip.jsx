@@ -1,7 +1,7 @@
 import React from 'react';
 
 // CustomTooltip with cluster-wide active/inactive status
-const CustomTooltip = ({ active, payload, label, nodeColors, selectedNodes, formatTimeLabel }) => {
+const CustomTooltip = ({ active, payload, label, nodeColors, selectedNodes, formatTimeLabel, showAsPercentage }) => {
   if (!active || !payload || !payload.length) return null;
   const topNodesCount = 3;
   
@@ -18,10 +18,27 @@ const CustomTooltip = ({ active, payload, label, nodeColors, selectedNodes, form
       key !== 'total_capacity' &&
       selectedNodes[key]
     )
-    .map(([key, value]) => ({
-      dataKey: key,
-      value
-    }));
+    .map(([key, value]) => {
+      // For percentage mode, calculate percentage values
+      let displayValue = value;
+      let percentValue = null;
+      const capacityValue = pointData[`${key}_total`];
+      
+      if (capacityValue && capacityValue > 0) {
+        percentValue = (value / capacityValue) * 100;
+        if (showAsPercentage) {
+          displayValue = percentValue; // Use percentage as the main value in percentage mode
+        }
+      }
+      
+      return {
+        dataKey: key,
+        value: displayValue,
+        rawValue: value, // Keep original GB value
+        percentValue, // Store percentage value
+        capacityValue // Store capacity value
+      };
+    });
   
   // Collect active status exactly like the details panel
   const activeStatus = {};
@@ -63,6 +80,14 @@ const CustomTooltip = ({ active, payload, label, nodeColors, selectedNodes, form
   } else if (activePercentage < 80) {
     statusColor = 'text-yellow-500';
     statusBg = 'bg-yellow-50';
+  }
+
+  // Calculate total utilization percentage if available
+  let totalUtilizationPercentage = null;
+  if (pointData.total_utilization !== undefined && 
+      pointData.total_capacity !== undefined && 
+      pointData.total_capacity > 0) {
+    totalUtilizationPercentage = (pointData.total_utilization / pointData.total_capacity) * 100;
   }
   
   return (
@@ -144,8 +169,24 @@ const CustomTooltip = ({ active, payload, label, nodeColors, selectedNodes, form
                   
                   {/* Memory value - dimmed for inactive */}
                   <span className={`font-medium flex-shrink-0 ${isActive ? 'text-purple-600' : 'text-purple-400'}`}>
-                    {item.value.toFixed(2)} GB
+                    {showAsPercentage 
+                      ? (item.percentValue !== null 
+                          ? `${item.percentValue.toFixed(1)}%` 
+                          : 'N/A')
+                      : `${item.rawValue.toFixed(2)} GB`}
                   </span>
+
+                  {/* Show percentage in parentheses if in GB mode, or GB in parentheses if in percentage mode */}
+                  {item.percentValue !== null && !showAsPercentage && (
+                    <span className="ml-1 text-slate-400 text-xs flex-shrink-0">
+                      ({item.percentValue.toFixed(0)}%)
+                    </span>
+                  )}
+                  {showAsPercentage && (
+                    <span className="ml-1 text-slate-400 text-xs flex-shrink-0">
+                      ({item.rawValue.toFixed(1)} GB)
+                    </span>
+                  )}
                   
                   {/* Small inactive label */}
                   {!isActive && (
@@ -172,11 +213,26 @@ const CustomTooltip = ({ active, payload, label, nodeColors, selectedNodes, form
           {pointData.total_utilization !== undefined && (
             <div className="flex justify-between items-center">
               <span className="text-slate-500">Total Utilization:</span>
-              <span className="font-medium text-purple-600 px-2 py-0.5 bg-purple-50 rounded">
-                {pointData.total_utilization.toFixed(2)} GB
-              </span>
+              <div className="flex items-center">
+                <span className="font-medium text-purple-600 px-2 py-0.5 bg-purple-50 rounded">
+                  {showAsPercentage && totalUtilizationPercentage !== null
+                    ? `${totalUtilizationPercentage.toFixed(1)}%`
+                    : `${pointData.total_utilization.toFixed(2)} GB`}
+                </span>
+                
+                {/* Show alternative format in smaller text */}
+                {totalUtilizationPercentage !== null && (
+                  <span className="ml-1 text-slate-400 text-xs">
+                    {showAsPercentage
+                      ? `(${pointData.total_utilization.toFixed(1)} GB)`
+                      : `(${totalUtilizationPercentage.toFixed(0)}%)`}
+                  </span>
+                )}
+              </div>
             </div>
           )}
+          
+          {/* Only show capacity in GB mode or as reference in percentage mode */}
           {pointData.total_capacity !== undefined && (
             <div className="flex justify-between items-center">
               <span className="text-slate-500">Total Capacity:</span>

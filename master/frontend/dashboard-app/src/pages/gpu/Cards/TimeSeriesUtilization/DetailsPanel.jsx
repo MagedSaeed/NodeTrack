@@ -4,11 +4,11 @@ import { Resizable } from 'react-resizable';
 import 'react-resizable/css/styles.css';
 
 // DetailsPanel component for showing detailed node information
-const DetailsPanel = ({ selectedPoint, nodeColors, onClose, setSelectedNodes }) => {
+const DetailsPanel = ({ selectedPoint, nodeColors, onClose, setSelectedNodes, showAsPercentage }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectAll, setSelectAll] = useState(true);
   // Reduced initial size for a more compact look
-  const [dimensions, setDimensions] = useState({ width: 480, height: 550 });
+  const [dimensions, setDimensions] = useState({ width: 550, height: 550 }); // Wider to accommodate percentage column
   const panelRef = useRef(null);
   // Set default sorting to active status first, then by usage (highest to lowest)
   const [sortConfig, setSortConfig] = useState({ key: 'default', direction: 'descending' });
@@ -35,6 +35,21 @@ const DetailsPanel = ({ selectedPoint, nodeColors, onClose, setSelectedNodes }) 
     return nodeName.includes(searchQuery.toLowerCase());
   });
   
+  // Calculate percentage for each node
+  const nodesWithPercentage = useMemo(() => {
+    return filteredNodes.map(node => {
+      const capacity = selectedPoint.capacities?.[node.dataKey] || 0;
+      let percentage = 0;
+      if (capacity > 0) {
+        percentage = (node.value / capacity) * 100;
+      }
+      return {
+        ...node,
+        percentage
+      };
+    });
+  }, [filteredNodes, selectedPoint.capacities]);
+  
   // Sorting logic
   const requestSort = (key) => {
     let direction = 'ascending';
@@ -46,7 +61,7 @@ const DetailsPanel = ({ selectedPoint, nodeColors, onClose, setSelectedNodes }) 
   
   // Apply sorting to filtered nodes
   const sortedNodes = useMemo(() => {
-    let sortableItems = [...filteredNodes];
+    let sortableItems = [...nodesWithPercentage];
     
     if (sortConfig.key && sortConfig.direction) {
       sortableItems.sort((a, b) => {
@@ -72,6 +87,9 @@ const DetailsPanel = ({ selectedPoint, nodeColors, onClose, setSelectedNodes }) 
         } else if (sortConfig.key === 'value') {
           aValue = a.value;
           bValue = b.value;
+        } else if (sortConfig.key === 'percentage') {
+          aValue = a.percentage;
+          bValue = b.percentage;
         } else if (sortConfig.key === 'capacity') {
           aValue = selectedPoint.capacities[a.dataKey] || 0;
           bValue = selectedPoint.capacities[b.dataKey] || 0;
@@ -81,7 +99,7 @@ const DetailsPanel = ({ selectedPoint, nodeColors, onClose, setSelectedNodes }) 
         }
         
         // Handle numeric comparisons
-        if (sortConfig.key === 'value' || sortConfig.key === 'capacity' || sortConfig.key === 'active') {
+        if (sortConfig.key === 'value' || sortConfig.key === 'percentage' || sortConfig.key === 'capacity' || sortConfig.key === 'active') {
           return sortConfig.direction === 'ascending' ? aValue - bValue : bValue - aValue;
         }
         
@@ -96,7 +114,7 @@ const DetailsPanel = ({ selectedPoint, nodeColors, onClose, setSelectedNodes }) 
       });
     }
     return sortableItems;
-  }, [filteredNodes, sortConfig, selectedPoint.capacities, selectedPoint.activeStatus]);
+  }, [nodesWithPercentage, sortConfig, selectedPoint.capacities, selectedPoint.activeStatus]);
   
   // Handle select/deselect all
   const handleSelectAll = () => {
@@ -148,12 +166,25 @@ const DetailsPanel = ({ selectedPoint, nodeColors, onClose, setSelectedNodes }) 
       <span className="text-blue-500 ml-1">↓</span>;
   };
   
+  // Calculate total memory utilization percentage
+  const totalUtilizationPercentage = useMemo(() => {
+    if (selectedPoint.totalUtilization && selectedPoint.totalCapacity && selectedPoint.totalCapacity > 0) {
+      return (selectedPoint.totalUtilization / selectedPoint.totalCapacity) * 100;
+    }
+    return 0;
+  }, [selectedPoint.totalUtilization, selectedPoint.totalCapacity]);
+  
+  // Common divider component for consistency
+  const Divider = () => (
+    <div className="h-6 border-l border-slate-200 mx-3"></div>
+  );
+  
   return (
     <Resizable
       width={dimensions.width}
       height={dimensions.height}
-      minConstraints={[380, 400]}
-      maxConstraints={[700, 700]}
+      minConstraints={[550, 400]} // Wider minimum width
+      maxConstraints={[800, 700]}
       onResize={onResize}
       handle={<div className="react-resizable-handle react-resizable-handle-se cursor-se-resize" />}
     >
@@ -204,28 +235,46 @@ const DetailsPanel = ({ selectedPoint, nodeColors, onClose, setSelectedNodes }) 
         <div className="flex-1 overflow-y-auto px-3 py-2">
           {/* Table Header - Smaller text and reduced padding */}
           <div className="flex items-center p-2 border-b border-slate-100 mb-2 font-medium text-xs text-slate-500">
-            <div className="w-6"></div>
+            <div className="w-4"></div>
             <button 
               onClick={() => requestSort('dataKey')}
-              className={`flex items-center w-2/5 text-left hover:text-slate-800 ${sortConfig.key === 'dataKey' ? 'text-slate-800' : ''}`}
+              className={`flex items-center w-1/6 text-left hover:text-slate-800 ${sortConfig.key === 'dataKey' ? 'text-slate-800' : ''}`}
             >
               Node {getSortDirectionArrow('dataKey')}
             </button>
+            
+            <Divider />
+            
             <button 
               onClick={() => requestSort('value')}
-              className={`flex items-center w-1/5 text-right justify-end hover:text-slate-800 ${sortConfig.key === 'value' ? 'text-slate-800' : ''}`}
+              className={`flex items-center w-1/6 text-right justify-end hover:text-slate-800 ${sortConfig.key === 'value' ? 'text-slate-800' : ''}`}
             >
               Usage {getSortDirectionArrow('value')}
             </button>
+            
+            <Divider />
+            
+            <button 
+              onClick={() => requestSort('percentage')}
+              className={`flex items-center w-1/6 text-right justify-end hover:text-slate-800 ${sortConfig.key === 'percentage' ? 'text-slate-800' : ''}`}
+            >
+              Usage % {getSortDirectionArrow('percentage')}
+            </button>
+            
+            <Divider />
+            
             <button 
               onClick={() => requestSort('capacity')}
-              className={`flex items-center w-1/5 text-right justify-end hover:text-slate-800 ${sortConfig.key === 'capacity' ? 'text-slate-800' : ''}`}
+              className={`flex items-center w-1/6 text-right justify-end hover:text-slate-800 ${sortConfig.key === 'capacity' ? 'text-slate-800' : ''}`}
             >
               Capacity {getSortDirectionArrow('capacity')}
             </button>
+            
+            <Divider />
+            
             <button 
               onClick={() => requestSort('active')}
-              className={`flex items-center w-1/5 text-center justify-center hover:text-slate-800 ${sortConfig.key === 'active' ? 'text-slate-800' : ''}`}
+              className={`flex items-center w-1/6 text-center justify-center hover:text-slate-800 ${sortConfig.key === 'active' ? 'text-slate-800' : ''}`}
             >
               Status {getSortDirectionArrow('active')}
             </button>
@@ -248,6 +297,7 @@ const DetailsPanel = ({ selectedPoint, nodeColors, onClose, setSelectedNodes }) 
             {sortedNodes.map((item, index) => {
               const nodeName = item.dataKey;
               const capacityValue = selectedPoint.capacities?.[nodeName] || 0;
+              const percentageValue = item.percentage;
               const isActive = selectedPoint.activeStatus?.[nodeName] ?? true;
               
               return (
@@ -271,27 +321,53 @@ const DetailsPanel = ({ selectedPoint, nodeColors, onClose, setSelectedNodes }) 
 
                   {/* Node name - smaller text */}
                   <span 
-                    className={`text-xs truncate ml-2 w-2/5 ${isActive ? 'text-slate-700 font-medium' : 'text-slate-400'}`}
+                    className={`text-xs truncate ml-2 w-1/6 ${isActive ? 'text-slate-700 font-medium' : 'text-slate-400'}`}
                   >
                     {nodeName.replace('node_', 'Node ')}
                   </span>
                   
-                  {/* Utilization - smaller numbers */}
+                  <Divider />
+                  
+                  {/* Utilization - smaller numbers with right padding */}
                   <span 
-                    className={`text-xs font-medium w-1/5 text-right ${isActive ? 'text-purple-600' : 'text-purple-400'}`}
+                    className={`text-xs font-medium w-1/6 text-right ${isActive ? 'text-purple-600' : 'text-purple-400'}`}
                   >
                     {item.value.toFixed(1)} GB
                   </span>
                   
+                  <Divider />
+                  
+                  {/* Usage Percentage - new column with left padding */}
+                  <span 
+                    className={`text-xs font-medium w-1/6 text-right ${isActive ? 'text-blue-600' : 'text-blue-400'}`}
+                  >
+                    {percentageValue.toFixed(1)}%
+                    
+                    {/* Show a utilization indicator */}
+                    <div className="w-full h-1 bg-slate-100 rounded-full mt-1 overflow-hidden">
+                      <div 
+                        className={`h-full rounded-full ${
+                          percentageValue > 90 ? 'bg-red-500' : 
+                          percentageValue > 75 ? 'bg-yellow-500' : 'bg-blue-500'
+                        }`}
+                        style={{ width: `${Math.min(100, percentageValue)}%` }}
+                      ></div>
+                    </div>
+                  </span>
+                  
+                  <Divider />
+                  
                   {/* Capacity - smaller numbers */}
                   <span 
-                    className={`text-xs font-medium w-1/5 text-right ${isActive ? 'text-red-600' : 'text-red-400'}`}
+                    className={`text-xs font-medium w-1/6 text-right ${isActive ? 'text-red-600' : 'text-red-400'}`}
                   >
                     {capacityValue.toFixed(1)} GB
                   </span>
                   
+                  <Divider />
+                  
                   {/* Active status - smaller badges */}
-                  <div className="w-1/5 flex justify-center">
+                  <div className="w-1/6 flex justify-center">
                     {isActive ? (
                       <span className="px-1.5 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded">
                         Active
@@ -310,12 +386,32 @@ const DetailsPanel = ({ selectedPoint, nodeColors, onClose, setSelectedNodes }) 
         
         {/* Summary footer - More compact */}
         <div className="p-3 border-t border-slate-200 bg-slate-50">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             {selectedPoint.totalUtilization !== undefined && (
               <div className="bg-white p-3 rounded shadow-sm border border-slate-100">
                 <div className="text-xs text-slate-500 mb-0.5">Total Usage</div>
                 <div className="text-base font-medium text-purple-600">
                   {selectedPoint.totalUtilization.toFixed(1)} GB
+                </div>
+              </div>
+            )}
+            
+            {/* Add utilization percentage card */}
+            {selectedPoint.totalUtilization !== undefined && selectedPoint.totalCapacity !== undefined && (
+              <div className="bg-white p-3 rounded shadow-sm border border-slate-100">
+                <div className="text-xs text-slate-500 mb-0.5">Usage Percentage</div>
+                <div className="text-base font-medium text-blue-600">
+                  {totalUtilizationPercentage.toFixed(1)}%
+                </div>
+                {/* Add a progress bar for visualization */}
+                <div className="w-full h-1.5 bg-slate-100 rounded-full mt-1.5 overflow-hidden">
+                  <div 
+                    className={`h-full rounded-full ${
+                      totalUtilizationPercentage > 90 ? 'bg-red-500' : 
+                      totalUtilizationPercentage > 75 ? 'bg-yellow-500' : 'bg-blue-500'
+                    }`}
+                    style={{ width: `${Math.min(100, totalUtilizationPercentage)}%` }}
+                  ></div>
                 </div>
               </div>
             )}
