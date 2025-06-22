@@ -14,10 +14,8 @@ const GPU = () => {
 
   const fetchData = async () => {
     try {
-      const serverAddress = import.meta.env.VITE_SERVER_ADDRESS;
-      
-      // Construct URL with date parameters
-      const url = new URL(`http://${serverAddress}:5000/gpu/report`);
+      // Use relative path - Vite will proxy to backend
+      const url = new URL('/api/gpu/report', window.location.origin);
       if (startDate) url.searchParams.append('start_date', startDate);
       if (endDate) url.searchParams.append('end_date', endDate);
 
@@ -29,7 +27,6 @@ const GPU = () => {
         setLoading: setLoading
       });
     } catch (err) {
-      // Error is already handled by fetchWithTokenAuth
       console.error("Error in fetchData:", err);
     }
   };
