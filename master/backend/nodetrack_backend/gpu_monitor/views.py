@@ -27,7 +27,7 @@ def submit_gpu_data(request):
         if not item.get('memory_used'):
             item['memory_used'] = 0
         # add ip address from the request
-        item['ip_address'] = clien_ip
+        # item['ip_address'] = clien_ip # no need as we are now getting it from the  client itself
     created_count = 0
     
     for entry in bulk_data:

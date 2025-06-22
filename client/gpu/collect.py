@@ -8,6 +8,7 @@ import platform
 import subprocess
 import base64
 import sys
+import netifaces
 
 load_dotenv()
 
@@ -17,12 +18,23 @@ SERVER_ADDRESS = os.getenv("SERVER_ADDRESS")
 if SERVER_ADDRESS is None:
     raise Exception("SERVER_ADDRESS is not set. Set it in your .env file.")
 
+def get_first_non_loopback_ip():
+    for interface in netifaces.interfaces():
+        addresses = netifaces.ifaddresses(interface)
+        if netifaces.AF_INET in addresses:
+            for link in addresses[netifaces.AF_INET]:
+                ip_addr = link['addr']
+                if not ip_addr.startswith('127.'):
+                    return ip_addr # Return the first non-loopback IPv4 address found
+    return None # No non-loopback IP found
+
 
 class GPUCollector:
     """Base class for GPU stats collection"""
     
     def __init__(self):
         self.hostname = socket.gethostname()
+        self.ip_address = get_first_non_loopback_ip()
         
     def collect_stats(self):
         """Should be implemented by platform-specific classes"""
@@ -70,6 +82,7 @@ class LinuxGPUCollector(GPUCollector):
                 entry = {
                     "timestamp": timestamp,
                     "hostname": self.hostname,
+                    "ip_address": self.ip_address,
                     "gpu_id": gpu.index,
                     "gpu_name": gpu.name,
                     "username": None,
@@ -85,6 +98,7 @@ class LinuxGPUCollector(GPUCollector):
                     entry = {
                         "timestamp": timestamp,
                         "hostname": self.hostname,
+                        "ip_address": self.ip_address,
                         "gpu_id": gpu.index,
                         "gpu_name": gpu.name,
                         "username": process["username"],
@@ -170,6 +184,7 @@ class WindowsGPUCollector(GPUCollector):
                     entry = {
                         "timestamp": timestamp,
                         "hostname": self.hostname,
+                        "ip_adderss": self.ip_address,
                         "gpu_id": i,
                         "gpu_name": gpu.get("Name", "Unknown"),
                         "username": None,
@@ -208,6 +223,7 @@ class WindowsGPUCollector(GPUCollector):
                 entry = {
                     "timestamp": timestamp,
                     "hostname": self.hostname,
+                    "ip_address": self.ip_address,
                     "gpu_id": gpu_id,
                     "gpu_name": gpu_name,
                     "username": username,
@@ -225,6 +241,7 @@ class WindowsGPUCollector(GPUCollector):
                     entry = {
                         "timestamp": timestamp,
                         "hostname": self.hostname,
+                        "ip_address": self.ip_address,
                         "gpu_id": i,
                         "gpu_name": gpu.get("Name", "Unknown"),
                         "username": None,
