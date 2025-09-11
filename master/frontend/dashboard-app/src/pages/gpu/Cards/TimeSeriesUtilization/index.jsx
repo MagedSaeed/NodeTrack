@@ -8,6 +8,7 @@ import {
 } from 'recharts';
 import { Database, ChevronDown, Search } from 'lucide-react';
 import _ from 'lodash';
+import { useDateRange } from '../../../../contexts/DateContext';
 
 // Import components
 import CustomTooltip from './CustomTooltip';
@@ -42,6 +43,9 @@ const TimeSeriesUtilizationCard = ({ data }) => {
   
   const chartRef = useRef(null);
 
+  // Get date range from context
+  const { startDate, endDate } = useDateRange();
+
   // Format time label with the current period
   const formatTimeLabel = (timestamp) => formatTimeLabelUtil(timestamp, selectedPeriod.value);
 
@@ -68,14 +72,14 @@ const TimeSeriesUtilizationCard = ({ data }) => {
 
   // Process and filter data when dependencies change
   useEffect(() => {
-    const processedData = processTimeSeriesData(data, selectedPeriod, selectedNodes);
+    const processedData = processTimeSeriesData(data, selectedPeriod, selectedNodes, startDate, endDate);
     setFilteredData(processedData);
     
     // Reset details view when data changes
     setDetailsVisible(false);
     setSelectedPoint(null);
     
-  }, [selectedPeriod, data, selectedNodes]);
+  }, [selectedPeriod, data, selectedNodes, startDate, endDate]);
 
   // Simple brush change handler
   const handleBrushChange = (brushArea) => {

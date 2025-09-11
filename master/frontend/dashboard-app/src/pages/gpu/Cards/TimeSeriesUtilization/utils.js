@@ -71,11 +71,23 @@ export const formatTimeLabel = (timestamp, periodValue) => {
   }
 };
 
-export const processTimeSeriesData = (data, selectedPeriod, selectedNodes) => {
+export const processTimeSeriesData = (data, selectedPeriod, selectedNodes, startDateString, endDateString) => {
   if (!data?.time_series?.nodes_timeseries) return [];
 
-  const now = new Date();
-  const startDate = new Date(now.getTime() - (selectedPeriod.days * 24 * 60 * 60 * 1000));
+  // Use provided date range or fall back to period-based range
+  let startDate, endDate;
+  
+  if (startDateString && endDateString) {
+    startDate = new Date(startDateString);
+    endDate = new Date(endDateString);
+    // Add one day to endDate to make it inclusive
+    endDate.setDate(endDate.getDate() + 1);
+  } else {
+    // Fallback to the original logic
+    const now = new Date();
+    startDate = new Date(now.getTime() - (selectedPeriod.days * 24 * 60 * 60 * 1000));
+    endDate = now;
+  }
 
   const allTimestamps = new Set();
   const nodeData = {};
@@ -87,7 +99,7 @@ export const processTimeSeriesData = (data, selectedPeriod, selectedNodes) => {
     
     timeseries.forEach(point => {
       const pointDate = new Date(point.timestamp);
-      if (pointDate >= startDate && pointDate <= now) {
+      if (pointDate >= startDate && pointDate <= endDate) {
         const periodKey = getPeriodKey(pointDate, selectedPeriod.value);
         allTimestamps.add(periodKey);
         
