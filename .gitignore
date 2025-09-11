@@ -175,3 +175,4 @@ cython_debug/
 .vscode
 data
 local_notebooks
+master/backend/nodetrack_backend/cluster_nodes.yaml

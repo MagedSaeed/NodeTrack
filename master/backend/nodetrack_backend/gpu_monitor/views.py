@@ -7,9 +7,10 @@ from ipware.ip import get_client_ip
 from django.utils import timezone  # Import timezone module
 from collections import defaultdict
 from django.db.models.functions import TruncHour, TruncWeek, TruncMonth, TruncDay
-
+from django.http import Http404
 from core.models import Node
 from core.permissions import HasAPIToken
+from core.utils import get_primary_ip
 from gpu_monitor.models import GPU, GPUUsage
 from gpu_monitor.serializers import GPUUsageSubmitSerializer
 
@@ -23,6 +24,11 @@ def submit_gpu_data(request):
             'status': 'error', 
             'message': 'IP address not found in request'
         })
+    
+    # Validate IP and get primary IP mapping
+    primary_ip = get_primary_ip(clien_ip)
+    if not primary_ip:
+        raise Http404("IP address is Not found/Not trusted")
     for item in bulk_data:
         if not item.get('memory_used'):
             item['memory_used'] = 0
@@ -35,9 +41,9 @@ def submit_gpu_data(request):
         if serializer.is_valid():
             data = serializer.validated_data
             
-            # Get or create node
+            # Get or create node using primary IP
             node, _ = Node.objects.get_or_create(
-                ip_address=data['ip_address'],
+                ip_address=primary_ip,
                 defaults={'hostname': data['hostname']},
             )
             

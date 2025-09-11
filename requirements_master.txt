@@ -2,6 +2,7 @@ flask
 pandas
 Flask-Cors
 django~=5.2
+pyyaml~=6.0
 tabulate~=0.9
 python-dotenv
 psycopg2-binary
