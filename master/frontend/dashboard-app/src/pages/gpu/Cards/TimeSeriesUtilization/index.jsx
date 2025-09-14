@@ -295,7 +295,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
             <LineChart 
                 key={chartKey}
                 data={filteredData}
-                margin={{ top: 10, right: 25, left: 25, bottom: 90 }} // Increased right margin
+                margin={{ top: 10, right: 25, left: 25, bottom: 50 }} // Normal margins for main chart
                 onClick={(data) => {
                   // Ensure we have valid click data with an active payload
                   if (data && data.activePayload && data.activePayload.length > 0) {
@@ -497,38 +497,41 @@ const TimeSeriesUtilizationCard = ({ data }) => {
                     isAnimationActive={false}
                   />
                 )}
-                
-                {/* Fixed Brush Component with reduced width */}
-                <Brush 
+
+                {/* Brush Component moved back to main chart */}
+                <Brush
                   dataKey="timestamp"
-                  height={20} 
-                  stroke="#94a3b8"
+                  height={20}
+                  stroke="#475569"
                   fill="#f8fafc"
                   tickFormatter={(value) => {
                     const date = new Date(value);
                     return `${date.getMonth()+1}/${date.getDate()}`;
                   }}
-                  y={325}
+                  x={80}
+                  y={333}
                   travellerWidth={10}
-                  padding={{ top: 5, bottom: 5 }}
+                  padding={{ top: 1, bottom: 1 }}
                   tickGap={10}
                   onChange={handleBrushChange}
-                  tick={{ fontSize: 10, fill: '#64748b' }}
+                  tick={{ fontSize: 10, fill: '#475569' }}
                   alwaysShowText={true}
-                  // Reduce width to show right label
-                  width="80%"
-                  // Styling
+                  width={810}
                   strokeOpacity={0.8}
                   fillOpacity={0.2}
+                  rx={5}
+                  ry={5}
                   traveller={{
-                    fill: '#f1f5f9',
-                    stroke: '#64748b',
-                    strokeWidth: 1.5,
-                    width: 12,
+                    fill: '#ffffff',
+                    stroke: '#3b82f6',
+                    strokeWidth: 2,
+                    width: 14,
                     height: 20,
-                    r: 2
+                    r: 6,
+                    cursor: 'grab'
                   }}
                 />
+                
               </LineChart>
           </ResponsiveContainer>
           
@@ -545,7 +548,7 @@ const TimeSeriesUtilizationCard = ({ data }) => {
         </div>
 
         {/* Instructions text for brush usage */}
-        <div className="text-xs text-slate-500 text-center">
+        <div className="text-xs text-slate-500 text-center -mt-2">
           Drag the handles to adjust the visible time range
         </div>
 
