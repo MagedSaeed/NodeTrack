@@ -5,6 +5,11 @@ import { deleteCookie } from '../utils/auth'; // Import deleteCookie from auth
 
 const Header = () => {
     const { startDate, endDate, setStartDate, setEndDate } = useDateRange();
+
+    // Get today's date in YYYY-MM-DD format for max date constraint
+    const today = new Date().toISOString().split('T')[0];
+    // Get tomorrow's date for the end date field
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     
     const handleLogout = () => {
       // Ask for confirmation before logging out
@@ -32,6 +37,7 @@ const Header = () => {
               <input
                 type="date"
                 value={startDate}
+                max={today}
                 onChange={(e) => setStartDate(e.target.value)}
                 className="text-xs border rounded px-2 py-1"
               />
@@ -39,6 +45,7 @@ const Header = () => {
               <input
                 type="date"
                 value={endDate}
+                max={tomorrow}
                 onChange={(e) => setEndDate(e.target.value)}
                 className="text-xs border rounded px-2 py-1"
               />

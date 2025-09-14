@@ -76,15 +76,19 @@ export const processTimeSeriesData = (data, selectedPeriod, selectedNodes, start
 
   // Use provided date range or fall back to period-based range
   let startDate, endDate;
-  
+  const now = new Date();
+
   if (startDateString && endDateString) {
     startDate = new Date(startDateString);
     endDate = new Date(endDateString);
     // Add one day to endDate to make it inclusive
     endDate.setDate(endDate.getDate() + 1);
+    // Ensure endDate doesn't exceed current time
+    if (endDate > now) {
+      endDate = now;
+    }
   } else {
     // Fallback to the original logic
-    const now = new Date();
     startDate = new Date(now.getTime() - (selectedPeriod.days * 24 * 60 * 60 * 1000));
     endDate = now;
   }
@@ -99,10 +103,11 @@ export const processTimeSeriesData = (data, selectedPeriod, selectedNodes, start
     
     timeseries.forEach(point => {
       const pointDate = new Date(point.timestamp);
-      if (pointDate >= startDate && pointDate <= endDate) {
+      // Ensure point is within range and not in the future
+      if (pointDate >= startDate && pointDate <= endDate && pointDate <= now) {
         const periodKey = getPeriodKey(pointDate, selectedPeriod.value);
         allTimestamps.add(periodKey);
-        
+
         if (!nodeData[nodeName][periodKey]) {
           nodeData[nodeName][periodKey] = {
             used: [],
