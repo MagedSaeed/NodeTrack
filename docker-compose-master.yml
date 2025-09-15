@@ -11,6 +11,12 @@ services:
     volumes:
       - ./data/timescale_db:/var/lib/postgresql/data
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
 
   backend:
     build:
@@ -29,6 +35,12 @@ services:
     depends_on:
       - timescaledb
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+        reservations:
+          memory: 1G
 
   frontend:
     build:

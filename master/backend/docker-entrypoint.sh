@@ -25,4 +25,18 @@ fi
 
 # Start Gunicorn
 echo "Starting Gunicorn server..."
-exec gunicorn --workers=4 --bind=0.0.0.0:5000 --access-logfile=- nodetrack_backend.wsgi:application
+exec gunicorn \
+  --workers=4 \
+  --threads=4 \
+  --worker-class=gthread \
+  --worker-connections=100 \
+  --max-requests=500 \
+  --max-requests-jitter=50 \
+  --timeout=300 \
+  --keep-alive=5 \
+  --preload \
+  --bind=0.0.0.0:5000 \
+  --access-logfile=- \
+  --error-logfile=- \
+  --log-level=info \
+  nodetrack_backend.wsgi:application
