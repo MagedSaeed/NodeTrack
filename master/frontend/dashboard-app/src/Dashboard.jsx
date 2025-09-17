@@ -86,7 +86,7 @@ const DashboardContent = () => {
       {/* Collapsible Overview Section */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-slate-700">Cluster Overview</h2>
+          <h2 className="text-lg font-semibold text-slate-700">Cluster Overview at the selected time range</h2>
           <button
             onClick={() => {
               const newValue = !showOverview;
