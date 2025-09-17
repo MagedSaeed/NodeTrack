@@ -12,11 +12,11 @@ export default defineConfig({
   },
   server: {
     host: '0.0.0.0',
-    port: 3030,
+    port: 3000,
     strictPort: true,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:5000',
+        target: 'http://backend:5000',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
