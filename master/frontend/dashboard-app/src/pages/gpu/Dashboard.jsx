@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, AlertCircle } from 'lucide-react';
+import { Activity } from 'lucide-react';
 import TimeSeriesUtilizationCard from '../../shared_ui/TimeSeriesUtilization';
+import ErrorIcon from '../../shared_ui/ErrorIcon';
 import { useDateRange } from '../../contexts/DateContext';
 import { fetchWithTokenAuth } from '../../utils/auth'; // Import the auth utility
 
@@ -12,6 +13,9 @@ const GPU = () => {
 
   const fetchData = async () => {
     try {
+      // Clear previous error when starting new request
+      setError(null);
+
       // Use relative path - Vite will proxy to backend
       const url = new URL('/api/gpu/report', window.location.origin);
       if (startDate) url.searchParams.append('start_date', startDate);
@@ -26,6 +30,8 @@ const GPU = () => {
       });
     } catch (err) {
       console.error("Error in fetchData:", err);
+      setError(err.message || 'Failed to fetch data');
+      setLoading(false);
     }
   };
 
@@ -49,10 +55,7 @@ const GPU = () => {
   if (error) {
     return (
       <div className="flex items-center justify-center h-80">
-        <div className="p-3 bg-red-50 rounded-lg border border-red-100 flex items-center space-x-2">
-          <AlertCircle className="w-5 h-5 text-red-500" />
-          <span className="text-red-600 text-sm font-medium">{error}</span>
-        </div>
+        <ErrorIcon message={`Error loading GPU data: ${error}`} size="w-8 h-8" />
       </div>
     );
   }

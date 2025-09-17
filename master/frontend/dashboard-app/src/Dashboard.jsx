@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Database, Cpu, Server, Users, HardDrive, ChevronUp, ChevronDown, Loader2 } from 'lucide-react'
+import ErrorIcon from './shared_ui/ErrorIcon'
 import GPUDashboard from './pages/gpu/Dashboard'
 import CPUDashboard from './pages/cpu/Dashboard'
 import Header from './shared_ui/Header'
@@ -17,6 +18,7 @@ const DashboardContent = () => {
   });
   const [overviewData, setOverviewData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const { startDate, endDate } = useDateRange();
 
   const tabs = [
@@ -37,6 +39,7 @@ const DashboardContent = () => {
   // Fetch overview data from dedicated endpoint
   const fetchOverviewData = async () => {
     setLoading(true);
+    setError(null);
     try {
       const overviewUrl = new URL('/api/overview/', window.location.origin);
       if (startDate) overviewUrl.searchParams.append('start_date', startDate);
@@ -45,11 +48,12 @@ const DashboardContent = () => {
       await fetchWithTokenAuth({
         url: overviewUrl.toString(),
         onSuccess: (result) => setOverviewData(result),
-        onError: (errorMsg) => console.error('Overview data fetch error:', errorMsg),
+        onError: (errorMsg) => setError(errorMsg),
         setLoading
       });
     } catch (err) {
       console.error("Error fetching overview data:", err);
+      setError(err.message || 'Failed to fetch overview data');
       setLoading(false);
     }
   };
@@ -59,20 +63,30 @@ const DashboardContent = () => {
   }, [startDate, endDate]);
 
   // Create dynamic overview cards based on fetched data
+  const getCardValue = (dataKey) => {
+    if (error) {
+      return <ErrorIcon message={`Error loading overview data: ${error}`} />;
+    }
+    if (loading || !overviewData) {
+      return <Loader2 className="h-5 w-5 animate-spin text-slate-400" />;
+    }
+    return overviewData[dataKey];
+  };
+
   const overviewCards = [
     {
       title: "Total Nodes",
-      value: loading || !overviewData ? <Loader2 className="h-5 w-5 animate-spin text-slate-400" /> : overviewData.total_nodes,
+      value: getCardValue('total_nodes'),
       icon: Server
     },
     {
       title: "Total Users",
-      value: loading || !overviewData ? <Loader2 className="h-5 w-5 animate-spin text-slate-400" /> : overviewData.total_users,
+      value: getCardValue('total_users'),
       icon: Users
     },
     {
       title: "Total GPUs",
-      value: loading || !overviewData ? <Loader2 className="h-5 w-5 animate-spin text-slate-400" /> : overviewData.total_gpus,
+      value: getCardValue('total_gpus'),
       icon: HardDrive
     }
   ];

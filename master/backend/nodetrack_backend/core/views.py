@@ -59,13 +59,14 @@ def get_overview_stats(request):
             time__lte=end_time
         ).values_list('username', flat=True).distinct())
 
-        cpu_users = set(CPUUsage.objects.filter(
-            time__gte=start_time,
-            time__lte=end_time
-        ).values_list('username', flat=True).distinct())
+        # CPU users commented out - no longer tracking per-user CPU data
+        # cpu_users = set(CPUUsage.objects.filter(
+        #     time__gte=start_time,
+        #     time__lte=end_time
+        # ).values_list('username', flat=True).distinct())
 
-        all_users = gpu_users.union(cpu_users)
-        total_users = len(all_users)
+        # all_users = gpu_users.union(cpu_users)
+        total_users = len(gpu_users)
 
         return Response({
             'total_nodes': total_nodes,
