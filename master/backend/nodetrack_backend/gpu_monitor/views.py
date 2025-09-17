@@ -8,6 +8,8 @@ from django.utils import timezone  # Import timezone module
 from collections import defaultdict
 from django.db.models.functions import TruncHour, TruncWeek, TruncMonth, TruncDay
 from django.http import Http404
+from django.views.decorators.cache import cache_page
+from django.views.decorators.vary import vary_on_headers
 from core.models import Node
 from core.permissions import HasAPIToken
 from core.utils import get_primary_ip
@@ -75,6 +77,8 @@ def submit_gpu_data(request):
 
 @api_view(['GET'])
 @permission_classes([HasAPIToken])
+@cache_page(120)  # Cache for 2 minutes (120 seconds)
+@vary_on_headers('Authorization')  # Vary cache based on Authorization header
 def generate_gpu_report(request):
     try:
         # Get date range from query parameters

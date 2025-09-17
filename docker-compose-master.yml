@@ -12,6 +12,16 @@ services:
       - ./data/timescale_db:/var/lib/postgresql/data
     restart: unless-stopped
 
+  redis:
+    image: redis:7-alpine
+    container_name: nodetrack-redis
+    expose:
+      - "6379"
+    volumes:
+      - ./data/redis:/data
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
   backend:
     build:
       context: .
@@ -28,6 +38,7 @@ services:
       - ./data:/app/backend/data
     depends_on:
       - timescaledb
+      - redis
     restart: unless-stopped
     deploy:
       resources:

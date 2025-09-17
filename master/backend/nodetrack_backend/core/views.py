@@ -2,12 +2,16 @@ from django.db.models import Count
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
+from django.views.decorators.cache import cache_page
+from django.views.decorators.vary import vary_on_headers
 from core.models import Node
 from core.permissions import HasAPIToken
 
 
 @api_view(['GET'])
 @permission_classes([HasAPIToken])
+@cache_page(120)  # Cache for 2 minutes (120 seconds)
+@vary_on_headers('Authorization')  # Vary cache based on Authorization header
 def get_overview_stats(request):
     """Get overview statistics: total nodes, users, and GPUs within date range"""
     try:
