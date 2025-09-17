@@ -18,11 +18,6 @@ class GPUSerializer(serializers.ModelSerializer):
         model = GPU
         fields = ['id', 'gpu_id', 'memory_total']
 
-class NodeTimeSeriesSerializer(serializers.Serializer):
-    """Serializer for time series data points"""
-    timestamp = serializers.DateTimeField()
-    memory_used = serializers.FloatField()
-    memory_total = serializers.FloatField()
 
 class GPUReportSummarySerializer(serializers.Serializer):
     """Serializer for GPU report summary"""

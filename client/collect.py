@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 import os
 import traceback
 from gpu.collect import collect_gpu_stats_and_send
+from cpu.collect import collect_cpu_stats_and_send
 
 load_dotenv()
 
@@ -16,6 +17,7 @@ else:
 while True:
     try:
         collect_gpu_stats_and_send()
+        collect_cpu_stats_and_send()
     except Exception as e:
         print(f"Cannot send data to server at {time.strftime('%Y-%m-%d %H:%M:%S')}. The error is: ",e)
         print("Traceback:")

@@ -10,7 +10,26 @@ const Header = () => {
     const today = new Date().toISOString().split('T')[0];
     // Get tomorrow's date for the end date field
     const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    
+    // Get three months ago for minimum date constraint
+    const threeMonthsAgo = new Date(Date.now() - (90 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0];
+
+    // Validate start date on component mount and ensure it's not older than 3 months
+    useEffect(() => {
+        if (startDate < threeMonthsAgo) {
+            setStartDate(threeMonthsAgo);
+        }
+    }, [startDate, threeMonthsAgo, setStartDate]);
+
+    const handleStartDateChange = (e) => {
+        const selectedDate = e.target.value;
+        if (selectedDate < threeMonthsAgo) {
+            // If user tries to select a date older than 3 months, set it to 3 months ago
+            setStartDate(threeMonthsAgo);
+        } else {
+            setStartDate(selectedDate);
+        }
+    };
+
     const handleLogout = () => {
       // Ask for confirmation before logging out
       const confirmLogout = window.confirm('Are you sure you want to log out? You will need to enter your access token again on the next request.');
@@ -37,8 +56,9 @@ const Header = () => {
               <input
                 type="date"
                 value={startDate}
+                min={threeMonthsAgo}
                 max={today}
-                onChange={(e) => setStartDate(e.target.value)}
+                onChange={handleStartDateChange}
                 className="text-xs border rounded px-2 py-1"
               />
               <span className="text-xs text-slate-500">to</span>

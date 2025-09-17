@@ -30,7 +30,7 @@ exec gunicorn \
   --threads=4 \
   --worker-class=gthread \
   --worker-connections=100 \
-  --max-requests=500 \
+  --max-requests=25 \
   --max-requests-jitter=50 \
   --timeout=300 \
   --keep-alive=5 \

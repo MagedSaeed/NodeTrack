@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, AlertCircle } from 'lucide-react';
+import { Activity, AlertCircle, Cpu } from 'lucide-react';
 import TimeSeriesUtilizationCard from '../../shared_ui/TimeSeriesUtilization';
 import { useDateRange } from '../../contexts/DateContext';
-import { fetchWithTokenAuth } from '../../utils/auth'; // Import the auth utility
+import { fetchWithTokenAuth } from '../../utils/auth';
 
-const GPU = () => {
+const CPU = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -13,7 +13,7 @@ const GPU = () => {
   const fetchData = async () => {
     try {
       // Use relative path - Vite will proxy to backend
-      const url = new URL('/api/gpu/report', window.location.origin);
+      const url = new URL('/api/cpu/report', window.location.origin);
       if (startDate) url.searchParams.append('start_date', startDate);
       if (endDate) url.searchParams.append('end_date', endDate);
 
@@ -33,7 +33,7 @@ const GPU = () => {
     fetchData();
     // Set up polling interval
     const interval = setInterval(fetchData, 300000); // 5 minutes
-    
+
     // Cleanup interval on unmount
     return () => clearInterval(interval);
   }, [startDate, endDate]); // Re-fetch when dates change
@@ -67,18 +67,24 @@ const GPU = () => {
       </div>
     );
   }
+
   return (
     <div>
       {/* Charts Section */}
       <div className="space-y-4">
         {/* Time Series Utilization Chart */}
-        <TimeSeriesUtilizationCard data={data} />
-
-        {/* Activity Log - Fixed Table */}
-        {/* <ActivityLog data={data} /> */}
+        <TimeSeriesUtilizationCard
+          data={data}
+          title="Node CPU Usage Over Time"
+          icon={Cpu}
+          yAxisLabel="CPU Usage (%)"
+          percentageAxisLabel="CPU Usage (%)"
+          showPercentageOption={false}
+          showTotalLinesOption={false}
+        />
       </div>
     </div>
   );
 };
 
-export default GPU;
+export default CPU;

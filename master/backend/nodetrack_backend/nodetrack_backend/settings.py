@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     # created
     'core',
     'gpu_monitor',
+    'cpu_monitor',
 ]
 
 MIDDLEWARE = [
