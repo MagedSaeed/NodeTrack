@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Database, Cpu, Server, Users, HardDrive, ChevronUp, ChevronDown } from 'lucide-react'
+import { Database, Cpu, Server, Users, HardDrive, ChevronUp, ChevronDown, Loader2 } from 'lucide-react'
 import GPUDashboard from './pages/gpu/Dashboard'
 import CPUDashboard from './pages/cpu/Dashboard'
 import Header from './shared_ui/Header'
@@ -15,8 +15,7 @@ const DashboardContent = () => {
     const saved = localStorage.getItem('nodetrack-overview-visible');
     return saved !== null ? JSON.parse(saved) : true;
   });
-  const [gpuData, setGpuData] = useState(null);
-  const [cpuData, setCpuData] = useState(null);
+  const [overviewData, setOverviewData] = useState(null);
   const [loading, setLoading] = useState(true);
   const { startDate, endDate } = useDateRange();
 
@@ -35,36 +34,22 @@ const DashboardContent = () => {
     }
   ];
 
-  // Fetch overview data from both GPU and CPU endpoints
+  // Fetch overview data from dedicated endpoint
   const fetchOverviewData = async () => {
     setLoading(true);
     try {
-      // Fetch GPU data
-      const gpuUrl = new URL('/api/gpu/report', window.location.origin);
-      if (startDate) gpuUrl.searchParams.append('start_date', startDate);
-      if (endDate) gpuUrl.searchParams.append('end_date', endDate);
+      const overviewUrl = new URL('/api/overview/', window.location.origin);
+      if (startDate) overviewUrl.searchParams.append('start_date', startDate);
+      if (endDate) overviewUrl.searchParams.append('end_date', endDate);
 
       await fetchWithTokenAuth({
-        url: gpuUrl.toString(),
-        onSuccess: (result) => setGpuData(result),
-        onError: (errorMsg) => console.error('GPU data fetch error:', errorMsg),
-        setLoading: () => {} // Don't set loading here since we have multiple requests
-      });
-
-      // Fetch CPU data
-      const cpuUrl = new URL('/api/cpu/report', window.location.origin);
-      if (startDate) cpuUrl.searchParams.append('start_date', startDate);
-      if (endDate) cpuUrl.searchParams.append('end_date', endDate);
-
-      await fetchWithTokenAuth({
-        url: cpuUrl.toString(),
-        onSuccess: (result) => setCpuData(result),
-        onError: (errorMsg) => console.error('CPU data fetch error:', errorMsg),
-        setLoading: () => {} // Don't set loading here since we have multiple requests
+        url: overviewUrl.toString(),
+        onSuccess: (result) => setOverviewData(result),
+        onError: (errorMsg) => console.error('Overview data fetch error:', errorMsg),
+        setLoading
       });
     } catch (err) {
       console.error("Error fetching overview data:", err);
-    } finally {
       setLoading(false);
     }
   };
@@ -77,22 +62,17 @@ const DashboardContent = () => {
   const overviewCards = [
     {
       title: "Total Nodes",
-      value: loading ? "Loading..." : Math.max(gpuData?.summary?.total_nodes || 0, cpuData?.summary?.total_nodes || 0),
+      value: loading || !overviewData ? <Loader2 className="h-5 w-5 animate-spin text-slate-400" /> : overviewData.total_nodes,
       icon: Server
     },
     {
       title: "Total Users",
-      value: loading ? "Loading..." : (() => {
-        const gpuUsers = Object.keys(gpuData?.per_user || {});
-        const cpuUsers = Object.keys(cpuData?.per_user || {});
-        const allUsers = new Set([...gpuUsers, ...cpuUsers]);
-        return allUsers.size;
-      })(),
+      value: loading || !overviewData ? <Loader2 className="h-5 w-5 animate-spin text-slate-400" /> : overviewData.total_users,
       icon: Users
     },
     {
       title: "Total GPUs",
-      value: loading ? "Loading..." : gpuData?.summary?.total_gpus || 0,
+      value: loading || !overviewData ? <Loader2 className="h-5 w-5 animate-spin text-slate-400" /> : overviewData.total_gpus,
       icon: HardDrive
     }
   ];

@@ -16,9 +16,11 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from core import views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('gpu/', include('gpu_monitor.urls')),
     path('cpu/', include('cpu_monitor.urls')),
+    path('overview/', views.get_overview_stats, name='overview_stats'),
 ]
