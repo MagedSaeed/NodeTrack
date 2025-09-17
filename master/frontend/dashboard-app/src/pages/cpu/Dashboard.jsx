@@ -57,7 +57,7 @@ const CPU = () => {
     );
   }
 
-  if (!data || !data.per_user || !data.per_node) {
+  if (!data || !data.per_node) {
     return (
       <div className="flex items-center justify-center h-80">
         <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-100 flex items-center space-x-2">

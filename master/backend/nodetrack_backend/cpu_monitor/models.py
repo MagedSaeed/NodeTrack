@@ -5,15 +5,15 @@ from timescale.db.models.managers import TimescaleManager
 from timescale.db.models.fields import TimescaleDateTimeField
 
 class CPUUsage(TimescaleModel):
-    """Time series record of CPU usage by user
+    """Time series record of overall node CPU usage
 
     Inherits from TimescaleModel which automatically creates a hypertable
     with the 'time' field as the time dimension.
     """
     node = models.ForeignKey(Node, on_delete=models.CASCADE, related_name='cpu_usage_records')
-    username = models.CharField(max_length=100)
-    usage_percent = models.FloatField(help_text="CPU usage percentage for this user")
-    cores = models.IntegerField(help_text="Number of CPU cores")
+    usage_percent = models.FloatField(help_text="Overall CPU usage percentage for the node")
+    cores_logical = models.IntegerField(help_text="Number of logical CPU cores", default=0)
+    cores_physical = models.IntegerField(help_text="Number of physical CPU cores", default=0)
     frequency_mhz = models.FloatField(null=True, blank=True, help_text="CPU frequency in MHz")
 
     # TimescaleModel already includes a 'time' field of type TimescaleDateTimeField
@@ -27,11 +27,10 @@ class CPUUsage(TimescaleModel):
 
     class Meta:
         indexes = [
-            models.Index(fields=['username']),
             models.Index(fields=['usage_percent']),
         ]
         verbose_name = "CPU Usage Record"
         verbose_name_plural = "CPU Usage Records"
 
     def __str__(self):
-        return f"{self.node.hostname} - {self.username} - {self.time} - {self.usage_percent}%"
+        return f"{self.node.hostname} - {self.time} - {self.usage_percent}%"

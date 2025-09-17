@@ -4,9 +4,9 @@ class CPUUsageSubmitSerializer(serializers.Serializer):
     hostname = serializers.CharField()
     timestamp = serializers.DateTimeField()
     ip_address = serializers.IPAddressField()
-    username = serializers.CharField()
     cpu_usage_percent = serializers.FloatField()
-    cpu_cores = serializers.IntegerField()
+    cpu_cores_logical = serializers.IntegerField()
+    cpu_cores_physical = serializers.IntegerField()
     cpu_frequency_mhz = serializers.FloatField(required=False, allow_null=True)
 
 

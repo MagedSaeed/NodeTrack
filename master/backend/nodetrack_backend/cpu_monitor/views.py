@@ -50,9 +50,9 @@ def submit_cpu_data(request):
 
             CPUUsage.objects.create(
                 node=node,
-                username=data['username'],
                 usage_percent=data['cpu_usage_percent'],
-                cores=data['cpu_cores'],
+                cores_logical=data['cpu_cores_logical'],
+                cores_physical=data['cpu_cores_physical'],
                 frequency_mhz=data.get('cpu_frequency_mhz'),
                 time=timestamp
             )
@@ -90,23 +90,8 @@ def generate_cpu_report(request):
         # Get time series data
         time_series_data = get_cpu_time_series_data(period, start_time, end_time)
 
-        # Get per-user statistics
+        # Per-user stats commented out for performance (can be re-enabled later)
         per_user = {}
-        user_stats = CPUUsage.timescale.filter(
-            time__gte=start_time,
-            time__lte=end_time
-        ).values('username').annotate(
-            avg_usage=Avg('usage_percent'),
-            max_usage=Max('usage_percent'),
-            nodes_used=Count('node', distinct=True)
-        )
-
-        for stat in user_stats:
-            per_user[stat['username']] = {
-                'avg_usage': float(stat['avg_usage']) if stat['avg_usage'] else 0.0,
-                'max_usage': float(stat['max_usage']) if stat['max_usage'] else 0.0,
-                'nodes_used': stat['nodes_used']
-            }
 
         # Get per-node statistics
         per_node = {}
@@ -117,8 +102,8 @@ def generate_cpu_report(request):
             avg_usage=Avg('usage_percent'),
             max_usage=Max('usage_percent'),
             min_usage=Min('usage_percent'),
-            total_cores=Max('cores'),
-            max_users=Count('username', distinct=True),
+            total_cores_logical=Max('cores_logical'),
+            total_cores_physical=Max('cores_physical'),
             avg_frequency=Avg('frequency_mhz')
         )
 
@@ -128,8 +113,8 @@ def generate_cpu_report(request):
                 'avg_usage': float(stat['avg_usage']) if stat['avg_usage'] else 0.0,
                 'max_usage': float(stat['max_usage']) if stat['max_usage'] else 0.0,
                 'min_usage': float(stat['min_usage']) if stat['min_usage'] else 0.0,
-                'total_cores': stat['total_cores'],
-                'max_users': stat['max_users'],
+                'total_cores_logical': stat['total_cores_logical'],
+                'total_cores_physical': stat['total_cores_physical'],
                 'avg_frequency': float(stat['avg_frequency']) if stat['avg_frequency'] else 0.0
             }
 
@@ -234,7 +219,7 @@ def get_cpu_time_series_data(period='hour', start_time=None, end_time=None):
 
     # Calculate summary statistics
     total_nodes = len(nodes)
-    total_cores = CPUUsage.objects.aggregate(total=Sum('cores'))['total'] or 0
+    total_cores = CPUUsage.objects.aggregate(total=Sum('cores_logical'))['total'] or 0
     avg_frequency = CPUUsage.objects.aggregate(avg=Avg('frequency_mhz'))['avg'] or 0
 
     summary = {

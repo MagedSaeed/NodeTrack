@@ -3,9 +3,9 @@ from .models import CPUUsage
 
 @admin.register(CPUUsage)
 class CPUUsageAdmin(admin.ModelAdmin):
-    list_display = ('node', 'username', 'usage_percent_display', 'cores', 'frequency_ghz_display', 'time')
-    list_filter = ('username', 'node', 'time')
-    search_fields = ('username', 'node__hostname')
+    list_display = ('node', 'usage_percent_display', 'cores_logical', 'cores_physical', 'frequency_ghz_display', 'time')
+    list_filter = ('node', 'time')
+    search_fields = ('node__hostname',)
     date_hierarchy = 'time'
     ordering = ('-time',)
 

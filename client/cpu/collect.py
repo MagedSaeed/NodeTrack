@@ -25,57 +25,26 @@ class CPUCollector:
         self.ip_address = get_first_non_loopback_ip()
 
     def collect_stats(self):
-        """Collect CPU statistics by user"""
+        """Collect overall node CPU statistics"""
         try:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-            # Get overall CPU metrics
-            overall_cpu_percent = psutil.cpu_percent(interval=1)
-            cpu_count = psutil.cpu_count()
+            # Get overall CPU metrics with proper interval for accurate reading
+            overall_cpu_percent = psutil.cpu_percent(interval=10)
+            cpu_count_logical = psutil.cpu_count(logical=True)  # For actual utilization capacity
+            cpu_count_physical = psutil.cpu_count(logical=False)  # For hardware info
             cpu_freq = psutil.cpu_freq()
 
-            # Get CPU usage by user
-            user_cpu = {}
-            for proc in psutil.process_iter(['username', 'cpu_percent']):
-                try:
-                    proc_info = proc.info
-                    username = proc_info['username']
-                    cpu_percent = proc_info['cpu_percent']
-
-                    if username and cpu_percent:
-                        if username in user_cpu:
-                            user_cpu[username] += cpu_percent
-                        else:
-                            user_cpu[username] = cpu_percent
-                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                    pass
-
-            usage_data = []
-
-            # Create records for users with significant CPU usage (>0.1%)
-            for username, cpu_percent in user_cpu.items():
-                if cpu_percent > 0.1:
-                    usage_data.append({
-                        "timestamp": timestamp,
-                        "hostname": self.hostname,
-                        "ip_address": self.ip_address,
-                        "username": username,
-                        "cpu_usage_percent": round(cpu_percent, 2),
-                        "cpu_cores": cpu_count,
-                        "cpu_frequency_mhz": cpu_freq.current if cpu_freq else None
-                    })
-
-            # If no users have significant usage, create one record with system usage
-            if not usage_data:
-                usage_data.append({
-                    "timestamp": timestamp,
-                    "hostname": self.hostname,
-                    "ip_address": self.ip_address,
-                    "username": "system",
-                    "cpu_usage_percent": overall_cpu_percent,
-                    "cpu_cores": cpu_count,
-                    "cpu_frequency_mhz": cpu_freq.current if cpu_freq else None
-                })
+            # Create single record for the node's overall CPU usage
+            usage_data = [{
+                "timestamp": timestamp,
+                "hostname": self.hostname,
+                "ip_address": self.ip_address,
+                "cpu_usage_percent": round(overall_cpu_percent, 2),
+                "cpu_cores_logical": cpu_count_logical,
+                "cpu_cores_physical": cpu_count_physical,
+                "cpu_frequency_mhz": round(cpu_freq.current, 2) if cpu_freq else None
+            }]
 
             return usage_data
 
